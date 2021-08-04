@@ -33,9 +33,9 @@ create table "user" (
                       created_by varchar(255) not null,
                       updated_by varchar(255)
 );
-create index idx_user_code on "user" (code);
-create index idx_user_email1 on "user" (email1);
-create index idx_user_pancard on "user" (pancard);
+create unique index idx_user_code on "user" (code);
+create unique index idx_user_email1 on "user" (email1);
+create unique index idx_user_pancard on "user" (pancard);
 
 create table address (
                       id serial primary key,

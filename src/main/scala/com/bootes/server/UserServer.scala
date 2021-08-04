@@ -1,9 +1,9 @@
-package com.bootes.zhttp
+package com.bootes.server
 
-import com.bootes.quill.{UserService, ZioQuillContext}
-import com.bootes.quill.{UserService, ZioQuillContext}
-import com.bootes.quill.repository.{UserRepository, NotFoundException}
-import com.bootes.zhttp.auth.AuthenticationApp
+import com.bootes.dao.{UserService, ZioQuillContext}
+import com.bootes.dao.{UserService, ZioQuillContext}
+import com.bootes.dao.repository.{UserRepository, NotFoundException}
+import com.bootes.server.auth.AuthenticationApp
 import zhttp.http._
 import zhttp.service.Server
 import zio._

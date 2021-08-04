@@ -1,6 +1,6 @@
-package com.bootes.quill
+package com.bootes.dao
 
-import com.bootes.quill.repository.UserRepository
+import com.bootes.dao.repository.UserRepository
 import zio._
 import zio.console._
 import zio.magic._

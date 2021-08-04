@@ -1,4 +1,4 @@
-package com.bootes.zhttp
+package com.bootes.server
 
 import zhttp.service.Server
 import zio._

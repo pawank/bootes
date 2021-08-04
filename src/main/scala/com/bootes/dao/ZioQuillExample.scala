@@ -1,6 +1,6 @@
-package com.bootes.quill
+package com.bootes.dao
 
-import com.bootes.quill.repository.JSONB
+import com.bootes.dao.repository.JSONB
 import io.getquill.context.ZioJdbc.{QConnection, QDataSource}
 import io.getquill.{PostgresZioJdbcContext, SnakeCase}
 import zio._

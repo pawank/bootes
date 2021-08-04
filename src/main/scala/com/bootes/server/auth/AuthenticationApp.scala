@@ -1,7 +1,7 @@
-package com.bootes.zhttp.auth
+package com.bootes.server.auth
 
-import com.bootes.zhttp.RequestOps
-import com.bootes.zhttp.RequestOps
+import com.bootes.server.RequestOps
+import com.bootes.server.RequestOps
 import pdi.jwt.{Jwt, JwtAlgorithm, JwtClaim}
 import zhttp.http._
 import zio.json.{DeriveJsonCodec, JsonCodec}
@@ -49,7 +49,7 @@ object AuthenticationApp extends RequestOps {
   }
 
   def login: Http[Any, HttpError.Unauthorized, Request, UResponse] = Http
-    .collectM[Request] { case req @ Method.POST -> Root / "login" =>
+    .collectM[Request] { case req @ Method.POST -> Root / "bootes" / "v1" / "login" =>
       for {
         loginRequest      <- extractBodyFromJson[LoginRequest](req)
         authenticatedUser <- validateLogin(loginRequest)

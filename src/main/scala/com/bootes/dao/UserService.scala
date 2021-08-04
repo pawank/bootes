@@ -1,6 +1,6 @@
-package com.bootes.quill
+package com.bootes.dao
 
-import com.bootes.quill.repository.{JSONB, UserRepository}
+import com.bootes.dao.repository.{JSONB, UserRepository}
 import io.getquill.Embedded
 import io.scalaland.chimney.dsl.TransformerOps
 import zio.{Has, RIO, RLayer, Task, ZIO}
@@ -128,8 +128,11 @@ object User {
 @accessible
 trait UserService {
   def create(request: CreateUserRequest): Task[User]
+  def update(id: Long, request: CreateUserRequest): Task[User]
   def all: Task[Seq[User]]
   def get(id: Long): Task[User]
+  def get(code: String): Task[User]
+  def getByEmail(email: String): Task[User]
 }
 
 object UserService {
@@ -148,4 +151,12 @@ case class UserServiceLive(repository: UserRepository, console: Console.Service)
   } yield users.sortBy(_.id)
 
   override def get(id: Long): Task[User] = repository.findById(id)
+
+  override def update(id: Long, request: CreateUserRequest): Task[User] =  {
+    repository.update(User.fromUserRecord(request).copy(id = id))
+  }
+
+  override def get(code: String): Task[User] = repository.findByCode(code)
+
+  override def getByEmail(email: String): Task[User] = repository.findByEmail(email)
 }

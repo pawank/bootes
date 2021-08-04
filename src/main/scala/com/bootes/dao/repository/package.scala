@@ -1,4 +1,4 @@
-package com.bootes.quill
+package com.bootes.dao
 
 import io.getquill.context.jdbc.JdbcRunContext
 import io.getquill.{NamingStrategy, PostgresZioJdbcContext, SnakeCase}
@@ -36,5 +36,5 @@ package object repository {
 
 
 
-  case class NotFoundException(message: String, id: Long) extends Throwable
+  case class NotFoundException(message: String, value: String) extends Throwable
 }

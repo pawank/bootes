@@ -1,4 +1,4 @@
-package com.bootes.zhttp
+package com.bootes.server
 
 import zhttp.http.HttpData.CompleteData
 import zhttp.http.{Header, HttpError, Method, Request, URL}

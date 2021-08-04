@@ -1,4 +1,4 @@
-package com.bootes.quill
+package com.bootes.dao
 
 import io.getquill.context.ZioJdbc.QDataSource
 import zio.ZLayer

@@ -3,6 +3,7 @@ package com.bootes.server
 import com.bootes.dao.{CreateUserRequest, UserService}
 import com.bootes.dao.repository.NotFoundException
 import com.bootes.dao.{CreateUserRequest, UserService}
+import com.bootes.server.auth.Token
 import pdi.jwt.JwtClaim
 import zhttp.http._
 import zio.console._
@@ -11,22 +12,24 @@ import zio.{Has, IO, ZIO}
 
 object UserEndpoints extends RequestOps {
 
-  val user: JwtClaim => Http[Has[UserService] with Console, HttpError, Request, UResponse] = jwtClaim =>
+  //val user: JwtClaim => Http[Has[UserService] with Console, HttpError, Request, UResponse] = jwtClaim =>
+  val user: Token => Http[Has[UserService] with Console, HttpError, Request, UResponse] = jwtClaim => {
+    println(s"Claim = $jwtClaim")
     Http
       .collectM[Request] {
-        case Method.GET -> Root / "bootes" / "v1" / "users"        =>
+        case Method.GET -> Root / "bootes" / "v1" / "users" =>
           for {
-            _     <- putStrLn(s"Validated claim: $jwtClaim")
+            _ <- putStrLn(s"Validated claim: $jwtClaim")
             users <- UserService.all
           } yield Response.jsonString(users.toJson)
-        case Method.GET -> Root / "bootes" / "v1" / "users" / id   =>
+        case Method.GET -> Root / "bootes" / "v1" / "users" / id =>
           for {
-            _    <- putStrLn(s"Validated claim: $jwtClaim")
+            _ <- putStrLn(s"Validated claim: $jwtClaim")
             user <- UserService.get(id.toInt)
           } yield Response.jsonString(user.toJson)
-        case req @ Method.POST -> Root / "bootes" / "v1" / "users" =>
+        case req@Method.POST -> Root / "bootes" / "v1" / "users" =>
           for {
-            _       <- putStrLn(s"Validated claim: $jwtClaim")
+            _ <- putStrLn(s"Validated claim: $jwtClaim")
             request <- extractBodyFromJson[CreateUserRequest](req)
             results <- UserService.create(request)
           } yield Response.jsonString(results.toJson)
@@ -34,10 +37,11 @@ object UserEndpoints extends RequestOps {
       .catchAll {
         case NotFoundException(msg, id) =>
           Http.fail(HttpError.NotFound(Root / "bootes" / "v1" / "users" / id.toString))
-        case ex: Throwable              =>
+        case ex: Throwable =>
           Http.fail(HttpError.InternalServerError(msg = ex.getMessage, cause = Option(ex)))
-        case err                        => Http.fail(HttpError.InternalServerError(msg = err.toString))
+        case err => Http.fail(HttpError.InternalServerError(msg = err.toString))
       }
+  }
 }
 
 trait RequestOps {

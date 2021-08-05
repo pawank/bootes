@@ -2,7 +2,8 @@ package com.bootes.server.auth
 
 import com.bootes.server.RequestOps
 import com.bootes.server.RequestOps
-import pdi.jwt.{Jwt, JwtAlgorithm, JwtClaim}
+import com.bootes.server.auth.keycloak.KeycloakClientExample
+import pdi.jwt.{Jwt, JwtAlgorithm, JwtClaim, JwtOptions}
 import zhttp.http._
 import zio.json.{DeriveJsonCodec, JsonCodec}
 import zio.{IO, ZIO}
@@ -35,17 +36,33 @@ object AuthenticationApp extends RequestOps {
     }
   }
 
+  def makeToken(token: String): String = token
+  def getToken(header: String): Option[Token] = {
+    println(s"Received header = $header")
+    if (header.startsWith("Bearer")) {
+      for {
+        token <- header.split(" ").lastOption
+      } yield {
+        Token(token)
+      }
+    } else {
+      Option.empty
+    }
+  }
+
   // Authentication middleware
   // Takes in a Failing HttpApp and a Succeed HttpApp which are called based on Authentication success or failure
   // For each request tries to read the `X-ACCESS-TOKEN` header
   // Validates JWT Claim
-  def authenticate[R, E](fail: HttpApp[R, E], success: JwtClaim => HttpApp[R, E]): HttpApp[R, E] = Http.flatten {
-    Http
-      .fromFunction[Request] {
-        _.getHeader("Authorization")
-          .flatMap(header => jwtDecode(header.value.toString))
-          .fold[HttpApp[R, E]](fail)(success)
-      }
+  //def authenticate[R, E](fail: HttpApp[R, E], success: JwtClaim => HttpApp[R, E]): HttpApp[R, E] = Http.flatten {
+  def authenticate[R, E](fail: HttpApp[R, E], success: Token => HttpApp[R, E]): HttpApp[R, E] = Http.flatten {
+      Http
+        .fromFunction[Request] {
+          _.getHeader("Authorization")
+            .flatMap(header => getToken(header.value.toString))
+            //.flatMap(header => jwtDecode(header.value.toString))
+            .fold[HttpApp[R, E]](fail)(success)
+        }
   }
 
   def login: Http[Any, HttpError.Unauthorized, Request, UResponse] = Http
@@ -53,19 +70,42 @@ object AuthenticationApp extends RequestOps {
       for {
         loginRequest      <- extractBodyFromJson[LoginRequest](req)
         authenticatedUser <- validateLogin(loginRequest)
-        jwtClaim          <- ZIO.effect(jwtEncode(authenticatedUser.username))
+        jwtClaim          <- ZIO.effect(authenticatedUser.username)
+        //jwtClaim          <- ZIO.effect(jwtEncode(authenticatedUser.username))
       } yield Response.text(jwtClaim)
     }
     .catchAll { case FailedLogin(user) =>
       Http.fail(HttpError.Unauthorized(s"Failed login for user: $user."))
     }
 
-  def validateLogin(request: LoginRequest): IO[FailedLogin, AuthenticatedUser] =
+  def validateLogin(request: LoginRequest): IO[FailedLogin, AuthenticatedUser] = {
+    val apiLoginRequest = ApiLoginRequest.default.copy(username = request.username, password = request.password)
+    /*
     if (request.password == request.username.reverse) {
       ZIO.succeed(AuthenticatedUser(request.username))
     } else {
       ZIO.fail(FailedLogin(request.username))
     }
+     */
+    val r: ZIO[Any, FailedLogin, AuthenticatedUser] = for {
+      maybeToken <- KeycloakClientExample.loginViaSttp(Some(apiLoginRequest)).mapError(e => FailedLogin("Cannot serialize the login response"))
+      value <- {
+        maybeToken match {
+          case Right(tokenObject) =>
+            val token = tokenObject.access_token
+            ZIO.succeed(AuthenticatedUser(token))
+          case Left(error) =>
+            ZIO.fail(FailedLogin(error))
+        }
+      }
+    } yield value
+    r
+  }
+}
+
+case class Token(value: String) extends AnyVal
+object Token {
+  implicit val codec: JsonCodec[Token] = DeriveJsonCodec.gen[Token]
 }
 
 case class FailedLogin(user: String)

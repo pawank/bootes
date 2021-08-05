@@ -46,14 +46,16 @@ object KeycloakClientExample extends App {
       }
     } yield token
 
-  val loginViaSttp: ZIO[Any, Serializable, Either[String, ApiToken]] =
+  def loginViaSttp(inputLoginRequest: Option[ApiLoginRequest]): ZIO[Any, Serializable, Either[String, ApiToken]] = {
+    val currentLoginRequest =  inputLoginRequest.getOrElse(loginRequest)
     for {
       res          <- {
         import sttp.client3._
         import sttp.client3.asynchttpclient.zio.AsyncHttpClientZioBackend
         AsyncHttpClientZioBackend.managed().use { backend =>
-          val req = basicRequest.body(com.bootes.utils.caseClassToMap[String](loginRequest), "utf-8").post(uri"$loginUrl")
-          //val req = basicRequest.body(Map("client_id" -> "", "grant_type" -> "password", "client_secret" -> "", "scope" -> "openid", "username" -> "", "password" -> ""), "utf-8").post(uri"$loginUrl")
+          val payload = com.bootes.utils.getCCParams(currentLoginRequest)
+          println(s"Payload = $payload")
+          val req = basicRequest.body(payload, "utf-8").post(uri"$loginUrl")
           println(s"Sending sttp request = $req")
           val res: Task[Response[Either[String, String]]] = req.send(backend)
           println(s"Response based on sttp = $res")
@@ -68,6 +70,7 @@ object KeycloakClientExample extends App {
         }
       }
     } yield res
+  }
 
   def getUsers(maybeToken: Either[String, ApiToken]): ZIO[EventLoopGroup with ChannelFactory, Serializable, Seq[User]] = {
     maybeToken match {
@@ -96,7 +99,7 @@ object KeycloakClientExample extends App {
 
   val program: ZIO[Console with EventLoopGroup with ChannelFactory, Serializable, Unit] =
     for {
-      users         <- loginViaSttp >>= getUsers
+      users         <- loginViaSttp(Some(loginRequest)) >>= getUsers
       //users         <- login >>= getUsers
       //namesAndPrices = users.map(i => i.code -> i.status)
       //_             <- putStrLn(s"Found users:\n\t${namesAndPrices.mkString("\n\t")}")

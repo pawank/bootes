@@ -41,6 +41,7 @@ libraryDependencies ++= Seq(
   "com.softwaremill.sttp.tapir"   %% "tapir-zio"                % tapirVersion,
   "io.scalaland"                  %% "chimney"                  % chimneyVersion,
   "com.softwaremill.sttp.client3" %% "httpclient-backend-zio"   % sttpVersion,
+  "com.softwaremill.sttp.client3" %% "async-http-client-backend-zio" % sttpVersion,
   "com.github.jwt-scala"          %% "jwt-core"                 % "8.0.2",
   "org.postgresql"                 % "postgresql"               % "42.2.8",
   "ch.qos.logback"                 % "logback-classic"          % "1.2.3",

@@ -1,7 +1,7 @@
 package com.bootes.server.auth.keycloak
 
 import com.bootes.dao.User
-import com.bootes.dao.keycloak.Models.{KeycloakError, KeycloakUser}
+import com.bootes.dao.keycloak.Models.{KeycloakError, KeycloakSuccess, KeycloakUser}
 import com.bootes.server.auth.{ApiLoginRequest, ApiToken, LoginRequest}
 import sttp.client3.SttpBackend
 import zhttp.core.ByteBuf
@@ -89,7 +89,7 @@ object KeycloakClientExample extends App {
               import sttp.client3._
               import sttp.client3.asynchttpclient.zio.AsyncHttpClientZioBackend
               AsyncHttpClientZioBackend.managed().use { backend =>
-                val payload = KeycloakUser(username = "pawan", firstName = "pawan", lastName = "kumar", email = Some("pawan@test.com")).toJson
+                val payload = KeycloakUser(username = "pawan2", firstName = "pawan", lastName = "kumar", email = Some("pawan2@test.com")).toJson
                 val req = basicRequest.contentType("application/json").auth.bearer(token).body(payload).post(uri"$userCreateUrl")
                 println(s"Sending sttp create user request = $req")
                 val res: Task[Response[Either[String, String]]] = req.send(backend)
@@ -101,18 +101,19 @@ object KeycloakClientExample extends App {
                       r.body match {
                         case Right(data) =>
                           println(s"Sttp zio response for user create = ${data}")
-                          ZIO.succeed(data.fromJson[ApiToken])
+                          ZIO.succeed(Right(KeycloakSuccess(message = "Created")))
                         case Left(error) =>
                           ZIO.fail(Left(s"<you shouldn't see this> $error"))
                       }
                     case _ =>
                       r.body match {
                         case Right(data) =>
+                          val success: String = data.fromJson[KeycloakError].fold(s => s, c => c.errorMessage)
+                          ZIO.fail(success)
+                        case Left(data) =>
                           println(s"Sttp zio response for user create = ${data}")
-                          val error = data.fromJson[KeycloakError]
-                          ZIO.fail(error.getOrElse("An unknown error has occurred"))
-                        case Left(error) =>
-                          ZIO.fail(Left(s"<you shouldn't see this> $error"))
+                          val error: String = data.fromJson[KeycloakError].fold(s => s, c => c.errorMessage)
+                          ZIO.fail(Left(s"${error}"))
                       }
                   }
                 })

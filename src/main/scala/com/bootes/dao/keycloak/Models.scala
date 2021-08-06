@@ -48,4 +48,8 @@ object Models {
     implicit val codec: JsonCodec[KeycloakError] = DeriveJsonCodec.gen[KeycloakError]
   }
 
+  case class KeycloakSuccess(message: String)
+  object KeycloakSuccess{
+    implicit val codec: JsonCodec[KeycloakSuccess] = DeriveJsonCodec.gen[KeycloakSuccess]
+  }
 }

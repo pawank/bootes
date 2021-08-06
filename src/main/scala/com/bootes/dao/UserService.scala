@@ -1,5 +1,6 @@
 package com.bootes.dao
 
+import com.bootes.dao.keycloak.Models.KeycloakUser
 import com.bootes.dao.repository.{JSONB, UserRepository}
 import io.getquill.Embedded
 import io.scalaland.chimney.dsl.TransformerOps
@@ -123,6 +124,12 @@ object User {
   implicit val codec: JsonCodec[User]                                 = DeriveJsonCodec.gen[User]
 
   val sample = User(`type` = "real", code = "1", pii = PiiInfo(firstName = "Pawan", lastName = "Kumar"), status = "active", metadata = Some(Metadata.default))
+
+  implicit def fromKeycloakUser(keycloakUser: KeycloakUser): User = {
+    User(id = -1, `type` = "real", code = keycloakUser.username, pii = PiiInfo(firstName = keycloakUser.firstName, lastName = keycloakUser.lastName, email1 = keycloakUser.email),
+      status = if (keycloakUser.enabled) "active" else "inactive", metadata = Some(Metadata.default)
+    )
+  }
 }
 
 @accessible

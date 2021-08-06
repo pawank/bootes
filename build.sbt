@@ -46,6 +46,12 @@ libraryDependencies ++= Seq(
   "org.postgresql"                 % "postgresql"               % "42.2.8",
   "ch.qos.logback"                 % "logback-classic"          % "1.2.3",
   "net.logstash.logback"           % "logstash-logback-encoder" % "6.5",
+  //"com.fullfacing"                %% "keycloak4s-core"          % "3.1.0",
+  //"com.fullfacing"                %% "keycloak4s-admin"         % "3.1.0",
+  //"com.fullfacing"                %% "keycloak4s-admin-monix"   % "3.1.0",
+  //"com.fullfacing"                %% "keycloak4s-admin-monix-bio" % "3.1.0",
+  //"com.fullfacing"                %% "keycloak4s-auth-akka-http"  % "3.1.0",
+  "org.keycloak"                  % "keycloak-admin-client"     % "14.0.0",
   "dev.zio"                       %% "zio-test"                 % zioVersion % Test,
   "dev.zio"                       %% "zio-test-sbt"             % zioVersion % Test,
   "dev.zio"                       %% "zio-test-magnolia"        % zioVersion % Test

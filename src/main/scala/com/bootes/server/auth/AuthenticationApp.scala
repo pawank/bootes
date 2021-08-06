@@ -123,9 +123,10 @@ case class ApiLoginRequest(scope: String, client_id: String, client_secret: Stri
 object ApiLoginRequest {
   implicit val codec: JsonCodec[ApiLoginRequest] = DeriveJsonCodec.gen[ApiLoginRequest]
   val clientSecret = System.getenv("CLIENT_SECRET")
+  val clientId = System.getenv("CLIENT_ID")
   val requestedUsername = System.getenv("REQUESTED_USERNAME")
   val requestedPassword = System.getenv("REQUESTED_PASSWORD")
-  val default = ApiLoginRequest(scope = "openid", client_id = "rapidor-jwt", client_secret = clientSecret, grant_type = "password", username = requestedUsername, password = requestedPassword)
+  val default = ApiLoginRequest(scope = "openid", client_id = clientId, client_secret = clientSecret, grant_type = "password", username = requestedUsername, password = requestedPassword)
 }
 
 case class ApiToken (

@@ -18,9 +18,13 @@ object UserServer extends App {
       config = CORSConfig(anyOrigin = true)
     ) +++ InvoiceEndpoints.invoiceRoutes
 
-  val program: ZIO[Any, Throwable, Nothing] = Server
-    .start(8080, endpoints)
-    .inject(Console.live, ZioQuillContext.dataSourceLayer, UserService.layer, UserRepository.layer)
+  val program: ZIO[Any, Throwable, Nothing] = {
+    import sttp.client3._
+    import sttp.client3.asynchttpclient.zio._
+    Server
+      .start(8080, endpoints)
+      .inject(Console.live, AsyncHttpClientZioBackend.layer(), UserService.layerKeycloakService)
+  }
 
   override def run(args: List[String]): URIO[zio.ZEnv, ExitCode] = program.exitCode
 }

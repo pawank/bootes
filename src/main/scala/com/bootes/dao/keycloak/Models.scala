@@ -52,4 +52,9 @@ object Models {
   object KeycloakSuccess{
     implicit val codec: JsonCodec[KeycloakSuccess] = DeriveJsonCodec.gen[KeycloakSuccess]
   }
+
+  case class ServiceContext(token: String)
+  object ServiceContext {
+    implicit val codec: JsonCodec[ServiceContext] = DeriveJsonCodec.gen[ServiceContext]
+  }
 }

@@ -1,11 +1,13 @@
 package com.bootes.dao
 
+import com.bootes.dao.keycloak.Models.ServiceContext
 import com.bootes.dao.repository.UserRepository
 import zio._
 import zio.console._
 import zio.magic._
 
 object ZioQuillRepositoryExample extends App {
+  implicit val serviceContext: ServiceContext = ServiceContext(token = "")
 
   val items = Seq(CreateUserRequest.sample)
 

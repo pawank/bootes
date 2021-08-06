@@ -1,7 +1,8 @@
 package com.bootes.server
 
-import com.bootes.dao.{CreateUserRequest, UserService}
+import com.bootes.dao.keycloak.Models.ServiceContext
 import com.bootes.dao.repository.NotFoundException
+import com.bootes.dao.{CreateUserRequest, ResponseMessage, UserService}
 import com.bootes.dao.{CreateUserRequest, UserService}
 import com.bootes.server.auth.Token
 import pdi.jwt.JwtClaim
@@ -15,6 +16,7 @@ object UserEndpoints extends RequestOps {
   //val user: JwtClaim => Http[Has[UserService] with Console, HttpError, Request, UResponse] = jwtClaim =>
   val user: Token => Http[Has[UserService] with Console, HttpError, Request, UResponse] = jwtClaim => {
     println(s"Claim = $jwtClaim")
+    implicit val serviceContext: ServiceContext = ServiceContext(token = jwtClaim.value)
     Http
       .collectM[Request] {
         case Method.GET -> Root / "bootes" / "v1" / "users" =>
@@ -38,7 +40,10 @@ object UserEndpoints extends RequestOps {
         case NotFoundException(msg, id) =>
           Http.fail(HttpError.NotFound(Root / "bootes" / "v1" / "users" / id.toString))
         case ex: Throwable =>
-          Http.fail(HttpError.InternalServerError(msg = ex.getMessage, cause = Option(ex)))
+          Http.fail(HttpError.InternalServerError(msg = ex.getMessage, cause = None))
+          //Http.fail(HttpError.InternalServerError(msg = ex.getMessage, cause = Option(ex)))
+        //val error = ResponseMessage(status = false, code = 501, message = ex.getMessage, details = Option(ex.getStackTrace.mkString))
+        //Http.succeed(Response.jsonString(error.toJson))
         case err => Http.fail(HttpError.InternalServerError(msg = err.toString))
       }
   }

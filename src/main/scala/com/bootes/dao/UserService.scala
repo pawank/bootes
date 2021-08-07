@@ -190,7 +190,7 @@ case class KeycloakUserServiceLive(console: Console.Service) extends UserService
 
   override def create(request: CreateUserRequest)(implicit ctx: ServiceContext): Task[User] = {
     val token = ctx.token
-    val payload = KeycloakUser(username = "pawan3", firstName = "pawan", lastName = "kumar", email = Some("pawan3@test.com")).toJson
+    val payload = KeycloakUser(username = "pawan33", firstName = "pawan", lastName = "kumar", email = Some("pawan33@test.com")).toJson
     val req = basicRequest.contentType("application/json").auth.bearer(token).body(payload).post(uri"$userCreateUrl")
     println(s"Sending sttp create user request = $req")
     val response: ZIO[SttpClient, Throwable, Response[Either[String, String]]] = send(req)

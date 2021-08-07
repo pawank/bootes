@@ -4,25 +4,39 @@ import com.bootes.dao.keycloak.Models.ServiceContext
 import com.bootes.dao.repository.NotFoundException
 import com.bootes.dao.{CreateUserRequest, ResponseMessage, UserService}
 import com.bootes.dao.{CreateUserRequest, UserService}
+import com.bootes.server.UserServer.{CalculationId, CalculationNumber}
 import com.bootes.server.auth.Token
 import pdi.jwt.JwtClaim
 import zhttp.http._
 import zio.console._
+import zio.duration.durationInt
 import zio.json._
-import zio.{Has, IO, ZIO}
+import zio.{Has, IO, UIO, ZIO}
+import zio.logging._
+import zio.logging.slf4j._
+
+import java.util.UUID
 
 object UserEndpoints extends RequestOps {
-
-  //val user: JwtClaim => Http[Has[UserService] with Console, HttpError, Request, UResponse] = jwtClaim =>
-  val user: Token => Http[Has[UserService] with Console, HttpError, Request, UResponse] = jwtClaim => {
+  val user: Token => Http[Has[UserService] with Console with Logging, HttpError, Request, UResponse] = jwtClaim => {
     println(s"Claim = $jwtClaim")
     implicit val serviceContext: ServiceContext = ServiceContext(token = jwtClaim.value)
     Http
       .collectM[Request] {
         case Method.GET -> Root / "bootes" / "v1" / "users" =>
           for {
+            correlationId <- UIO(Some(UUID.randomUUID()))
+            _ <- log.locally(CalculationId(Some(UUID.randomUUID())).andThen(CalculationNumber(1)))(
+              log.debug("Hello differently from ZIO logger")
+            )
+            _ <- log.locally(LogAnnotation.CorrelationId(correlationId)) {
+                log.debug("Hello from ZIO logger")
+            }
             _ <- putStrLn(s"Validated claim: $jwtClaim")
             users <- UserService.all
+            _ <- log.locally(LogAnnotation.CorrelationId(correlationId)) {
+              log.debug("Done from ZIO logger")
+            }
           } yield Response.jsonString(users.toJson)
         case Method.GET -> Root / "bootes" / "v1" / "users" / id =>
           for {

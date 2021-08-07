@@ -46,6 +46,8 @@ libraryDependencies ++= Seq(
   "org.postgresql"                 % "postgresql"               % "42.2.8",
   "ch.qos.logback"                 % "logback-classic"          % "1.2.3",
   "net.logstash.logback"           % "logstash-logback-encoder" % "6.5",
+  "com.github.mvv.zilog"          %% "zilog"                    % "0.1-M13",
+  "com.github.mvv.sredded"        %% "sredded-generic"          % "0.1-M2" % Provided,
   //"com.fullfacing"                %% "keycloak4s-core"          % "3.1.0",
   //"com.fullfacing"                %% "keycloak4s-admin"         % "3.1.0",
   //"com.fullfacing"                %% "keycloak4s-admin-monix"   % "3.1.0",

@@ -4,6 +4,8 @@ import zio.console.Console
 import zio.json.{DeriveJsonCodec, JsonCodec}
 import zio.macros.accessible
 
+import java.util.UUID
+
 object Models {
 
   case class Access (
@@ -18,7 +20,11 @@ object Models {
   }
 
   case class Attributes (
-                          phone: Seq[String]
+                          phone: Option[Seq[String]] = None,
+                          phone2: Option[Seq[String]] = None,
+                          phone3: Option[Seq[String]] = None,
+                          pancard: Option[Seq[String]] = None,
+                          passport: Option[Seq[String]] = None
                         )
   object Attributes {
     implicit val codec: JsonCodec[Attributes] = DeriveJsonCodec.gen[Attributes]
@@ -53,7 +59,7 @@ object Models {
     implicit val codec: JsonCodec[KeycloakSuccess] = DeriveJsonCodec.gen[KeycloakSuccess]
   }
 
-  case class ServiceContext(token: String)
+  case class ServiceContext(token: String, requestId: Option[UUID] = Option(UUID.randomUUID()))
   object ServiceContext {
     implicit val codec: JsonCodec[ServiceContext] = DeriveJsonCodec.gen[ServiceContext]
   }

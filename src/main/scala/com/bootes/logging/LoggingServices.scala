@@ -11,7 +11,7 @@ object LoggingServices {
     Logging.console(
       logLevel = LogLevel.Info,
       format = LogFormat.ColoredLogFormat()
-    ) >>> Logging.withRootLoggerName("zio-playground")
+    ) >>> Logging.withRootLoggerName("bootes")
 
   val simpleLive: TaskLayer[Logging] = ZEnv.live >>> simpleLogger
 }

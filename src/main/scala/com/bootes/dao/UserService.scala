@@ -1,20 +1,22 @@
 package com.bootes.dao
 
-import com.bootes.dao.keycloak.Models.{KeycloakError, KeycloakSuccess, KeycloakUser, ServiceContext}
+import com.bootes.config.Configuration.{KeycloakConfig, keycloakConfigDescription, keycloakConfigLayer, keycloakConfigValue}
+import com.bootes.dao.keycloak.Models.{Attributes, KeycloakError, KeycloakSuccess, KeycloakUser, ServiceContext}
 import com.bootes.dao.repository.{JSONB, UserRepository}
+import com.bootes.server.UserServer
 import com.bootes.server.auth.ApiToken
 import com.bootes.server.auth.keycloak.KeycloakClientExample.{loginUrl, userCreateUrl, usersUrl}
 import io.getquill.Embedded
 import io.scalaland.chimney.dsl.TransformerOps
 import sttp.client3.{Response, basicRequest}
 import sttp.client3.asynchttpclient.zio.SttpClient
-import zio.{Has, RIO, RLayer, Task, ZIO}
+import zio.{Has, IO, RIO, RLayer, Task, ZIO, system}
 import zio.console.Console
 import zio.json.{DeriveJsonCodec, JsonCodec}
 import zio.macros.accessible
 import zio.console._
 import zio.json._
-import zio.{Has, IO, ZIO}
+import zio.logging.{LogAnnotation, Logging, log}
 
 import java.time.{Instant, LocalDateTime, ZoneId, ZonedDateTime}
 import scala.language.implicitConversions
@@ -123,6 +125,10 @@ case class CreateUserRequest (
 object CreateUserRequest {
   implicit val codec: JsonCodec[CreateUserRequest] = DeriveJsonCodec.gen[CreateUserRequest]
   val sample = CreateUserRequest(`type` = "real", code = "111", pii = PiiInfo(firstName = "Pawan", lastName = "Kumar"), status = "active")
+
+  implicit def toKeycloakUser(user: CreateUserRequest): KeycloakUser = KeycloakUser(username = user.code, firstName = user.pii.firstName, lastName = user.pii.lastName, email = user.pii.email1,
+    attributes = user.vector.map(v => Attributes(pancard = v.pancard.map(Seq(_)), passport = v.passportNo.map(Seq(_))))
+  )
 }
 
 case class ResponseMessage(status: Boolean, code: Int, message: String, details: Option[String] = None)
@@ -189,16 +195,23 @@ case class KeycloakUserServiceLive(console: Console.Service) extends UserService
   val usersUrl: String                                   = "http://localhost:8180/auth/admin/realms/rapidor/users"
 
   override def create(request: CreateUserRequest)(implicit ctx: ServiceContext): Task[User] = {
+    import zio.config._
     val token = ctx.token
-    val payload = KeycloakUser(username = "pawan33", firstName = "pawan", lastName = "kumar", email = Some("pawan33@test.com")).toJson
+    val correlationId = ctx.requestId
+    val payload = CreateUserRequest.toKeycloakUser(request).toJson
     val req = basicRequest.contentType("application/json").auth.bearer(token).body(payload).post(uri"$userCreateUrl")
     println(s"Sending sttp create user request = $req")
     val response: ZIO[SttpClient, Throwable, Response[Either[String, String]]] = send(req)
     println(s"Response based on sttp create user = $response")
     //val result: ZIO[SttpClient, Throwable, Either[String, KeycloakSuccess]] = for {
-    val result: ZIO[SttpClient, Serializable, Right[Nothing, KeycloakSuccess]] = for {
+    val result: ZIO[SttpClient with system.System with Logging, Serializable, Right[Nothing, KeycloakSuccess]] = for {
+      _ <- log.locally(LogAnnotation.CorrelationId(correlationId)) {
+        log.debug("create")
+      }
+      configValue <- keycloakConfigValue
       res <- response
       output <- {
+        println(s"Config $configValue")
         Task{res}.flatMap(r => {
           println(s"Status code = ${r.code}")
           (r.code.code == 200) || (r.code.code == 201) match {
@@ -232,7 +245,7 @@ case class KeycloakUserServiceLive(console: Console.Service) extends UserService
         case Left(e) =>
           new RuntimeException(s"Error: $e")
       }
-    }).provideLayer(AsyncHttpClientZioBackend.layer())
+    }).provideLayer(AsyncHttpClientZioBackend.layer() ++ system.System.live ++ UserServer.logLayer)
   }
 
   override def all()(implicit ctx: ServiceContext): Task[Seq[User]] = {

@@ -18,7 +18,10 @@ import zio.logging.slf4j._
 import java.util.UUID
 
 object UserEndpoints extends RequestOps {
-  val user: Token => Http[Has[UserService] with Console with Logging, HttpError, Request, UResponse] = jwtClaim => {
+  import com.github.mvv.zilog.{Logging => ZLogging, Logger => ZLogger, log => zlog}
+  implicit val logger: ZLogger = ZLogger[UserServer.type]
+
+  val user: Token => Http[Has[UserService] with Console with Logging with ZLogging, HttpError, Request, UResponse] = jwtClaim => {
     println(s"Claim = $jwtClaim")
     implicit val serviceContext: ServiceContext = ServiceContext(token = jwtClaim.value)
     Http
@@ -29,6 +32,9 @@ object UserEndpoints extends RequestOps {
             _ <- log.locally(CalculationId(Some(UUID.randomUUID())).andThen(CalculationNumber(1)))(
               log.debug("Hello differently from ZIO logger")
             )
+            _ <- zlog.withLogArgs(RequestKey(ClientRequest("src", "GET", "/foo")), CorrelationIdKey("someId")) {
+              zlog.info("Logic go brrrrr", CustomerIdKey(123))
+            }
             _ <- log.locally(LogAnnotation.CorrelationId(correlationId)) {
                 log.debug("Hello from ZIO logger")
             }

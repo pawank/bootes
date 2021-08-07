@@ -10,32 +10,27 @@ import zio.console._
 import zio.duration.durationInt
 import zio.logging.Logging
 import zio.magic._
-/*
-import com.github.mvv.sredded.StructuredMapping
-import com.github.mvv.sredded.generic.deriveStructured
-import com.github.mvv.sredded.StructuredMapping
-import com.github.mvv.sredded.generic.deriveStructured
-import com.github.mvv.zilog._
-import zio.config.derivation.name
- */
 import zio.clock.Clock
 import zio.logging.{LogAnnotation, LogFormat, LogLevel}
 
 import java.util.UUID
 
-/*
+import com.github.mvv.sredded.StructuredMapping
+import com.github.mvv.sredded.generic.deriveStructured
+import com.github.mvv.sredded.StructuredMapping
+import com.github.mvv.sredded.generic.deriveStructured
+import com.github.mvv.zilog.{Logging => ZLogging, Logger => ZLogger}
+import zio.config.derivation.name
 final case class ClientRequest(src: String, method: String, path: String)
 object ClientRequest {
   implicit val structured: StructuredMapping[ClientRequest] = deriveStructured
 }
-
-object RequestKey extends Logging.Key[ClientRequest]("request")
-object CorrelationIdKey extends Logging.Key[String]("correlationId")
-object CustomerIdKey extends Logging.Key[Long]("customerId")
-*/
+object RequestKey extends ZLogging.Key[ClientRequest]("request")
+object CorrelationIdKey extends ZLogging.Key[String]("correlationId")
+object CustomerIdKey extends ZLogging.Key[Long]("customerId")
 
 object UserServer extends App {
-  //implicit val logger: Logger = Logger[UserServer.type]
+  implicit val logger: ZLogger = ZLogger[UserServer.type]
 
   final val CalculationId: LogAnnotation[Option[UUID]] = LogAnnotation[Option[UUID]](
     name = "calculation-id",
@@ -60,7 +55,7 @@ object UserServer extends App {
 
   val logLayer: TaskLayer[Logging] = ZEnv.live >>> logEnv
 
-  val endpoints: Http[Has[UserService] with Console with Logging, HttpError, Request, Response[Has[UserService] with Console with Logging, HttpError]] =
+  val endpoints: Http[Has[UserService] with Console with Logging with ZLogging, HttpError, Request, Response[Has[UserService] with Console with Logging with ZLogging, HttpError]] =
     AuthenticationApp.login +++ CORS(
       AuthenticationApp.authenticate(HttpApp.forbidden("None shall pass."), UserEndpoints.user),
       config = CORSConfig(anyOrigin = true)
@@ -71,7 +66,7 @@ object UserServer extends App {
     import sttp.client3.asynchttpclient.zio._
     Server
       .start(8080, endpoints)
-      .inject(Console.live, logLayer, AsyncHttpClientZioBackend.layer(), UserService.layerKeycloakService)
+      .inject(Console.live, logLayer, Clock.live, ZLogging.consoleJson(), AsyncHttpClientZioBackend.layer(), UserService.layerKeycloakService)
   }
 
   override def run(args: List[String]): URIO[zio.ZEnv, ExitCode] = program.exitCode

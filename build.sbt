@@ -11,6 +11,7 @@ val zioLoggingVersion = "0.5.8"
 val zioHttpVersion    = "1.0.0.0-RC17"
 val zioJsonVersion    = "0.2.0-M1"
 val zioOpticsVersion  = "0.1.0"
+val zioOpenTracingVersion = "0.8.1"
 val zioSchemaVersion  = "0.0.5"
 val zQueryVersion     = "0.2.9"
 val quillVersion      = "3.7.1"
@@ -35,6 +36,7 @@ libraryDependencies ++= Seq(
   "dev.zio"                       %% "zio-schema"               % zioSchemaVersion,
   "io.github.kitlangton"          %% "zio-magic"                % "0.3.2",
   "dev.zio"                       %% "zio-optics"               % zioOpticsVersion,
+  "dev.zio"                       %% "zio-opentracing"          % zioOpenTracingVersion,
   "io.d11"                        %% "zhttp"                    % zioHttpVersion,
   "io.getquill"                   %% "quill-jdbc-zio"           % quillVersion,
   "org.flywaydb"                   % "flyway-core"              % flywayVersion,
@@ -53,7 +55,10 @@ libraryDependencies ++= Seq(
   //"com.fullfacing"                %% "keycloak4s-admin-monix"   % "3.1.0",
   //"com.fullfacing"                %% "keycloak4s-admin-monix-bio" % "3.1.0",
   //"com.fullfacing"                %% "keycloak4s-auth-akka-http"  % "3.1.0",
-  "org.keycloak"                  % "keycloak-admin-client"     % "14.0.0",
+  //"org.keycloak"                  % "keycloak-admin-client"     % "14.0.0",
+  "com.outr"                      %% "scribe"                   % "3.4.0",
+  "com.outr"                      %% "scribe-slf4j"             % "3.4.0",
+  "com.softwaremill.sttp.client3" %% "scribe-backend"           % "3.3.13",
   "dev.zio"                       %% "zio-test"                 % zioVersion % Test,
   "dev.zio"                       %% "zio-test-sbt"             % zioVersion % Test,
   "dev.zio"                       %% "zio-test-magnolia"        % zioVersion % Test

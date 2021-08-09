@@ -22,12 +22,13 @@ object UserEndpoints extends RequestOps {
   implicit val logger: ZLogger = ZLogger[UserServer.type]
 
   val user: Token => Http[Has[UserService] with Console with Logging with ZLogging, HttpError, Request, UResponse] = jwtClaim => {
-    println(s"Claim = $jwtClaim")
+    scribe.debug(s"Claim found $jwtClaim")
     implicit val serviceContext: ServiceContext = ServiceContext(token = jwtClaim.value)
     Http
       .collectM[Request] {
         case Method.GET -> Root / "bootes" / "v1" / "users" =>
           for {
+            _ <- ZIO.succeed(scribe.info("Getting list of all users"))
             correlationId <- UIO(Some(UUID.randomUUID()))
             _ <- log.locally(CalculationId(Some(UUID.randomUUID())).andThen(CalculationNumber(1)))(
               log.debug("Hello differently from ZIO logger")

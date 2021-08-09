@@ -3,7 +3,7 @@ package com.bootes.server
 import com.bootes.dao.UserService
 import com.bootes.dao.repository.{NotFoundException, UserRepository}
 import com.bootes.server.auth.AuthenticationApp
-import zhttp.http._
+import zhttp.http.{Response, _}
 import zhttp.service.Server
 import zio._
 import zio.console._
@@ -14,13 +14,14 @@ import zio.clock.Clock
 import zio.logging.{LogAnnotation, LogFormat, LogLevel}
 
 import java.util.UUID
-
 import com.github.mvv.sredded.StructuredMapping
 import com.github.mvv.sredded.generic.deriveStructured
 import com.github.mvv.sredded.StructuredMapping
 import com.github.mvv.sredded.generic.deriveStructured
-import com.github.mvv.zilog.{Logging => ZLogging, Logger => ZLogger}
+import com.github.mvv.zilog.{Logger => ZLogger, Logging => ZLogging}
 import zio.config.derivation.name
+
+
 final case class ClientRequest(src: String, method: String, path: String)
 object ClientRequest {
   implicit val structured: StructuredMapping[ClientRequest] = deriveStructured
@@ -55,8 +56,17 @@ object UserServer extends App {
 
   val logLayer: TaskLayer[Logging] = ZEnv.live >>> logEnv
 
+  val root: Path = Root / "bootes" / "v1"
+  private def getVersion(root: Path):Http[Any, Nothing, Request, UResponse] = Http.collect[Request] {
+    case Method.GET -> `root` / "version" => {
+      val version = "0.1"
+      scribe.info(s"Service version = $version")
+      Response.jsonString(s"""{"version": "$version"}""")
+    }
+  }
+
   val endpoints: Http[Has[UserService] with Console with Logging with ZLogging, HttpError, Request, Response[Has[UserService] with Console with Logging with ZLogging, HttpError]] =
-    AuthenticationApp.login +++ CORS(
+    getVersion(root) +++ AuthenticationApp.login +++ CORS(
       AuthenticationApp.authenticate(HttpApp.forbidden("None shall pass."), UserEndpoints.user),
       config = CORSConfig(anyOrigin = true)
     ) +++ InvoiceEndpoints.invoiceRoutes
@@ -64,6 +74,7 @@ object UserServer extends App {
   val program: ZIO[Any, Throwable, Nothing] = {
     import sttp.client3._
     import sttp.client3.asynchttpclient.zio._
+    scribe.info("Starting bootes service..")
     Server
       .start(8080, endpoints)
       .inject(Console.live, logLayer, Clock.live, ZLogging.consoleJson(), AsyncHttpClientZioBackend.layer(), UserService.layerKeycloakService)

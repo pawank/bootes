@@ -18,8 +18,8 @@ object KeycloakClientExample extends App {
 
   val env: TaskLayer[ChannelFactory with EventLoopGroup] = ChannelFactory.auto ++ EventLoopGroup.auto()
   val loginUrl: String                                   = "http://localhost:8180/auth/realms/master/protocol/openid-connect/token"
-  val usersUrl: String                                   = "http://localhost:8180/auth/admin/realms/rapidor/users"
-  val userCreateUrl: String                              = "http://localhost:8180/auth/admin/realms/rapidor/users"
+  val usersUrl: String                                   = "http://localhost:8180/auth/admin/realms/bootes/users"
+  val userCreateUrl: String                              = "http://localhost:8180/auth/admin/realms/bootes/users"
   val token: String                                      = ""
   val headers                                            = List(Header.authorization(s"Bearer $token"))
   val loginRequest: ApiLoginRequest                         = ApiLoginRequest.default

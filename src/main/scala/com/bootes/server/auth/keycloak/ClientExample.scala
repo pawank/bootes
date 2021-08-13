@@ -55,10 +55,12 @@ object KeycloakClientExample extends App {
       res          <- {
         import sttp.client3._
         import sttp.client3.asynchttpclient.zio.AsyncHttpClientZioBackend
-        AsyncHttpClientZioBackend.managed().use { backend =>
+        import scala.concurrent.duration._
+        val options = SttpBackendOptions.connectionTimeout(1.minute)
+        AsyncHttpClientZioBackend.managed(options = options).use { backend =>
           val payload = com.bootes.utils.getCCParams(currentLoginRequest)
           println(s"Payload = $payload")
-          val req = basicRequest.body(payload, "utf-8").post(uri"$loginUrl")
+          val req = basicRequest.body(payload, "utf-8").post(uri"$loginUrl").readTimeout(5.minutes)
           println(s"Sending sttp request = $req")
           val res: Task[Response[Either[String, String]]] = req.send(backend)
           println(s"Response based on sttp = $res")

@@ -56,6 +56,7 @@ libraryDependencies ++= Seq(
   //"com.fullfacing"                %% "keycloak4s-admin-monix-bio" % "3.1.0",
   //"com.fullfacing"                %% "keycloak4s-auth-akka-http"  % "3.1.0",
   //"org.keycloak"                  % "keycloak-admin-client"     % "14.0.0",
+  "nl.vroste"                     %% "rezilience"               % "0.6.2",
   "com.outr"                      %% "scribe"                   % "3.4.0",
   "com.outr"                      %% "scribe-slf4j"             % "3.4.0",
   "com.softwaremill.sttp.client3" %% "scribe-backend"           % "3.3.13",

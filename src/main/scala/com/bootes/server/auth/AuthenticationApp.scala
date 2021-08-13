@@ -5,16 +5,15 @@ import com.bootes.server.RequestOps
 import com.bootes.server.auth.keycloak.KeycloakClientExample
 import pdi.jwt.{Jwt, JwtAlgorithm, JwtClaim, JwtOptions}
 import zhttp.http._
+import zio.clock.Clock
 import zio.json.{DeriveJsonCodec, JsonCodec}
 import zio.{IO, ZIO}
-
-import java.time.Clock
 
 object AuthenticationApp extends RequestOps {
   // Secret Authentication key
   val SECRET_KEY = "secretKey"
 
-  implicit val clock: Clock = Clock.systemUTC
+  implicit val clock: java.time.Clock = java.time.Clock.systemUTC
 
   // Helper to encode the JWT token
   def jwtEncode(username: String): String = {
@@ -65,7 +64,7 @@ object AuthenticationApp extends RequestOps {
         }
   }
 
-  def login: Http[Any, HttpError.Unauthorized, Request, UResponse] = Http
+  def login: Http[Clock, HttpError.Unauthorized, Request, UResponse] = Http
     .collectM[Request] { case req @ Method.POST -> Root / "bootes" / "v1" / "login" =>
       for {
         loginRequest      <- extractBodyFromJson[LoginRequest](req)
@@ -78,7 +77,7 @@ object AuthenticationApp extends RequestOps {
       Http.fail(HttpError.Unauthorized(s"Failed login for user: $user."))
     }
 
-  def validateLogin(request: LoginRequest): IO[FailedLogin, AuthenticatedUser] = {
+  def validateLogin(request: LoginRequest): ZIO[Clock, FailedLogin, AuthenticatedUser] = {
     val apiLoginRequest = ApiLoginRequest.default.copy(username = request.username, password = request.password)
     /*
     if (request.password == request.username.reverse) {
@@ -87,7 +86,7 @@ object AuthenticationApp extends RequestOps {
       ZIO.fail(FailedLogin(request.username))
     }
      */
-    val r: ZIO[Any, FailedLogin, AuthenticatedUser] = for {
+    val r: ZIO[Clock, FailedLogin, AuthenticatedUser] = for {
       maybeToken <- KeycloakClientExample.loginViaSttp(Some(apiLoginRequest)).mapError(e => FailedLogin("Cannot serialize the login response"))
       value <- {
         maybeToken match {

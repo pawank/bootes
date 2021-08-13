@@ -65,7 +65,7 @@ object UserServer extends App {
     }
   }
 
-  val endpoints: Http[Has[UserService] with Console with Logging with ZLogging, HttpError, Request, Response[Has[UserService] with Console with Logging with ZLogging, HttpError]] =
+  val endpoints: Http[Has[UserService] with Clock with Console with Logging with ZLogging, HttpError, Request, Response[Has[UserService] with Console with Logging with ZLogging, HttpError]] =
     getVersion(root) +++ AuthenticationApp.login +++ CORS(
       AuthenticationApp.authenticate(HttpApp.forbidden("None shall pass."), UserEndpoints.user),
       config = CORSConfig(anyOrigin = true)

@@ -3,12 +3,14 @@ package com.bootes.server.auth.keycloak
 import com.bootes.dao.User
 import com.bootes.dao.keycloak.Models.{KeycloakError, KeycloakSuccess, KeycloakUser}
 import com.bootes.server.auth.{ApiLoginRequest, ApiToken, LoginRequest}
+import nl.vroste.rezilience.RateLimiter
 import sttp.client3.SttpBackend
 import zhttp.core.ByteBuf
 import zhttp.http.HttpData.CompleteData
 import zhttp.http._
 import zhttp.service.{ChannelFactory, Client, EventLoopGroup}
 import zio._
+import zio.clock.Clock
 import zio.console._
 import zio.json._
 
@@ -49,29 +51,39 @@ object KeycloakClientExample extends App {
       }
     } yield token
 
-  def loginViaSttp(inputLoginRequest: Option[ApiLoginRequest]): ZIO[Any, Serializable, Either[String, ApiToken]] = {
+  val getRateLimiter:zio.ZManaged[Clock, Nothing, RateLimiter] = {
+    import zio.duration._
+    import nl.vroste.rezilience._
+    val rateLimiter: zio.ZManaged[Clock, Nothing, RateLimiter] = RateLimiter.make(max = 10, interval = 1.second)
+    rateLimiter
+  }
+
+  def loginViaSttp(inputLoginRequest: Option[ApiLoginRequest]): ZIO[Clock, Serializable, Either[String, ApiToken]] = {
     val currentLoginRequest =  inputLoginRequest.getOrElse(loginRequest)
     for {
       res          <- {
-        import sttp.client3._
-        import sttp.client3.asynchttpclient.zio.AsyncHttpClientZioBackend
-        import scala.concurrent.duration._
-        val options = SttpBackendOptions.connectionTimeout(1.minute)
-        AsyncHttpClientZioBackend.managed(options = options).use { backend =>
-          val payload = com.bootes.utils.getCCParams(currentLoginRequest)
-          println(s"Payload = $payload")
-          val req = basicRequest.body(payload, "utf-8").post(uri"$loginUrl").readTimeout(5.minutes)
-          println(s"Sending sttp request = $req")
-          val res: Task[Response[Either[String, String]]] = req.send(backend)
-          println(s"Response based on sttp = $res")
-          res.flatMap(r => {
-            r.body match {
-              case Right(data) =>
-                println(s"Sttp zio response = ${data}")
-                ZIO.succeed(data.fromJson[ApiToken])
-              case _ => ZIO.fail(Left("<you shouldn't see this>"))
-            }
-          })
+        getRateLimiter.use { rateLimiter =>
+
+          import sttp.client3._
+          import sttp.client3.asynchttpclient.zio.AsyncHttpClientZioBackend
+          import scala.concurrent.duration._
+          val options = SttpBackendOptions.connectionTimeout(1.minute)
+          AsyncHttpClientZioBackend.managed(options = options).use { backend =>
+            val payload = com.bootes.utils.getCCParams(currentLoginRequest)
+            println(s"Payload = $payload")
+            val req = basicRequest.body(payload, "utf-8").post(uri"$loginUrl").readTimeout(5.minutes)
+            println(s"Sending sttp request = $req")
+            val res: Task[Response[Either[String, String]]] = req.send(backend)
+            println(s"Response based on sttp = $res")
+            res.flatMap(r => {
+              r.body match {
+                case Right(data) =>
+                  println(s"Sttp zio response = ${data}")
+                  ZIO.succeed(data.fromJson[ApiToken])
+                case _ => ZIO.fail(Left("<you shouldn't see this>"))
+              }
+            })
+          }
         }
       }
     } yield res
@@ -156,7 +168,7 @@ object KeycloakClientExample extends App {
     }
   }
 
-  val program: ZIO[Console with EventLoopGroup with ChannelFactory, Serializable, Unit] =
+  val program: ZIO[Clock with Console with EventLoopGroup with ChannelFactory, Serializable, Unit] =
     for {
       users         <- loginViaSttp(Some(loginRequest)) >>= getUsers
       //users         <- login >>= getUsers

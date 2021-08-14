@@ -1,6 +1,7 @@
 package com.bootes.server.auth
 
-import com.bootes.client.{ZSttpClient}
+import com.bootes.client.ZSttpClient
+import com.bootes.config.Configuration.keycloakConfigValue
 import com.bootes.server.RequestOps
 import com.bootes.server.RequestOps
 import com.bootes.server.auth.keycloak.KeycloakClientExample
@@ -9,7 +10,7 @@ import zhttp.http._
 import zio.clock.Clock
 import zio.json.{DeriveJsonCodec, JsonCodec}
 import zio.logging.Logging
-import zio.{IO, ZIO}
+import zio.{IO, ZIO, system}
 
 object AuthenticationApp extends RequestOps {
   // Secret Authentication key
@@ -66,7 +67,7 @@ object AuthenticationApp extends RequestOps {
         }
   }
 
-  def login: Http[Logging with Clock, HttpError.Unauthorized, Request, UResponse] = Http
+  def login: Http[Logging with Clock with system.System, HttpError.Unauthorized, Request, UResponse] = Http
     .collectM[Request] { case req @ Method.POST -> Root / "bootes" / "v1" / "login" =>
       for {
         loginRequest      <- extractBodyFromJson[LoginRequest](req)
@@ -79,7 +80,7 @@ object AuthenticationApp extends RequestOps {
       Http.fail(HttpError.Unauthorized(s"Failed login for user: $user."))
     }
 
-  def validateLogin(request: LoginRequest): ZIO[Logging with Clock, FailedLogin, AuthenticatedUser] = {
+  def validateLogin(request: LoginRequest): ZIO[Logging with Clock with system.System, FailedLogin, AuthenticatedUser] = {
     val apiLoginRequest = ApiLoginRequest.default.copy(username = request.username, password = request.password)
     /*
     if (request.password == request.username.reverse) {
@@ -88,8 +89,12 @@ object AuthenticationApp extends RequestOps {
       ZIO.fail(FailedLogin(request.username))
     }
      */
-    val r: ZIO[Logging with Clock, FailedLogin, AuthenticatedUser] = for {
-      maybeToken <- ZSttpClient.loginViaSttp(Some(apiLoginRequest)).mapError(e => FailedLogin("Cannot serialize the login response"))
+    val r: ZIO[Logging with Clock with system.System, Object, AuthenticatedUser] = for {
+      configValue <- keycloakConfigValue
+      url = s"${configValue.keycloak.url}/realms/${configValue.keycloak.masterRealm}/protocol/openid-connect/token"
+      maybeToken <- {
+        ZSttpClient.login(url, Some(apiLoginRequest)).mapError(e => FailedLogin(s"${e.toString}"))
+      }
       value <- {
         maybeToken match {
           case Right(tokenObject) =>
@@ -100,7 +105,7 @@ object AuthenticationApp extends RequestOps {
         }
       }
     } yield value
-    r
+    r.mapError(e => FailedLogin(s"${e.toString}"))
   }
 }
 

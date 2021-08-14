@@ -22,7 +22,7 @@ object Configuration {
   val migrationConfigLive: ULayer[Has[MigrationConfig]] =
     TypesafeConfig.fromDefaultLoader(appConfigDescriptor).narrow(_.migration).orDie
 
-  case class KeycloakConfigValues(url: String, masterRealm: String, realm: Option[String])
+  case class KeycloakConfigValues(url: String, adminUsername: String, masterRealm: String, realm: Option[String])
   case class KeycloakConfig(keycloak: KeycloakConfigValues)
 
   val keycloakConfigAutomatic = descriptor[KeycloakConfig]

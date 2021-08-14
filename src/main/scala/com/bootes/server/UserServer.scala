@@ -65,7 +65,7 @@ object UserServer extends App {
     }
   }
 
-  val endpoints: Http[Has[UserService] with Clock with Console with Logging with ZLogging, HttpError, Request, Response[Has[UserService] with Console with Logging with ZLogging, HttpError]] =
+  val endpoints: Http[Has[UserService] with Clock with Console with Logging with ZLogging with system.System, HttpError, Request, Response[Has[UserService] with Console with Logging with ZLogging, HttpError]] =
     getVersion(root) +++ AuthenticationApp.login +++ CORS(
       AuthenticationApp.authenticate(HttpApp.forbidden("None shall pass."), UserEndpoints.user),
       config = CORSConfig(anyOrigin = true)
@@ -77,7 +77,7 @@ object UserServer extends App {
     scribe.info("Starting bootes service..")
     Server
       .start(8080, endpoints)
-      .inject(Console.live, logLayer, Clock.live, ZLogging.consoleJson(), AsyncHttpClientZioBackend.layer(), UserService.layerKeycloakService)
+      .inject(Console.live, logLayer, Clock.live, ZLogging.consoleJson(), AsyncHttpClientZioBackend.layer(), UserService.layerKeycloakService, system.System.live)
   }
 
   override def run(args: List[String]): URIO[zio.ZEnv, ExitCode] = program.exitCode

@@ -202,7 +202,7 @@ case class KeycloakUserServiceLive(console: Console.Service) extends UserService
       _ <- log.locally(CorrelationId(serviceContext.requestId).andThen(DebugJsonLog(configValue.toString)))(
                                                                                                 log.debug(s"Loaded config")
                                                                                                 )
-      url = s"${configValue.keycloak.url}/${configValue.keycloak.masterRealm}/realms/${configValue.keycloak.realm.getOrElse("")}/users"
+      url = s"${configValue.keycloak.url}/${configValue.keycloak.adminUsername}/realms/${configValue.keycloak.realm.getOrElse("")}/users"
       res <- {
         ZSttpClient.post(url, inputRequest, classOf[KeycloakSuccess], FormUsingJson)
       }
@@ -237,9 +237,9 @@ case class KeycloakUserServiceLive(console: Console.Service) extends UserService
       _ <- log.locally(CorrelationId(serviceContext.requestId).andThen(DebugJsonLog(configValue.toString)))(
         log.debug(s"Loaded config")
       )
-      url = s"${configValue.keycloak.url}/${configValue.keycloak.masterRealm}/realms/${configValue.keycloak.realm.getOrElse("")}/users"
+      url = s"${configValue.keycloak.url}/${configValue.keycloak.adminUsername}/realms/${configValue.keycloak.realm.getOrElse("")}/users"
       res <- {
-        ZSttpClient.get(url, CreateUserRequest.sample, classOf[List[KeycloakUser]], FormUsingJson)
+        ZSttpClient.getCollection(url, CreateUserRequest.sample, classOf[List[KeycloakUser]], FormUsingJson)
       }
       output <- {
         res match {

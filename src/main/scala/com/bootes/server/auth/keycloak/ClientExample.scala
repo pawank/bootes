@@ -1,7 +1,7 @@
 package com.bootes.server.auth.keycloak
 
 import com.bootes.dao.User
-import com.bootes.dao.keycloak.Models.{KeycloakError, KeycloakSuccess, KeycloakUser}
+import com.bootes.dao.keycloak.Models.{ApiResponseError, ApiResponseSuccess, KeycloakUser}
 import com.bootes.server.auth.{ApiLoginRequest, ApiToken, LoginRequest}
 import nl.vroste.rezilience.RateLimiter
 import sttp.client3.SttpBackend
@@ -115,18 +115,18 @@ object KeycloakClientExample extends App {
                       r.body match {
                         case Right(data) =>
                           println(s"Sttp zio response for user create = ${data}")
-                          ZIO.succeed(Right(KeycloakSuccess(message = "Created")))
+                          ZIO.succeed(Right(ApiResponseSuccess(message = "Created")))
                         case Left(error) =>
                           ZIO.fail(Left(s"<you shouldn't see this> $error"))
                       }
                     case _ =>
                       r.body match {
                         case Right(data) =>
-                          val success: String = data.fromJson[KeycloakError].fold(s => s, c => c.errorMessage)
+                          val success: String = data.fromJson[ApiResponseError].fold(s => s, c => c.errorMessage)
                           ZIO.fail(success)
                         case Left(data) =>
                           println(s"Sttp zio response for user create = ${data}")
-                          val error: String = data.fromJson[KeycloakError].fold(s => s, c => c.errorMessage)
+                          val error: String = data.fromJson[ApiResponseError].fold(s => s, c => c.errorMessage)
                           ZIO.fail(Left(s"${error}"))
                       }
                   }

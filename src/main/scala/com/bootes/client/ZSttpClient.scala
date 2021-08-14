@@ -3,7 +3,7 @@ package com.bootes.client
 import com.bootes.client.ZSttpClient.{getRateLimiter}
 import com.bootes.config.Configuration.keycloakConfigValue
 import com.bootes.dao.User
-import com.bootes.dao.keycloak.Models.{KeycloakError, KeycloakSuccess, KeycloakUser, ServiceContext}
+import com.bootes.dao.keycloak.Models.{ApiResponseError, ApiResponseSuccess, KeycloakUser, ServiceContext}
 import com.bootes.server.UserServer.{CorrelationId, DebugJsonLog, logEnv}
 import com.bootes.server.auth.{ApiLoginRequest, ApiToken, LoginRequest}
 import nl.vroste.rezilience.RateLimiter

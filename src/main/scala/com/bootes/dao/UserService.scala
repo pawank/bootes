@@ -2,7 +2,7 @@ package com.bootes.dao
 
 import com.bootes.client.{FormUsingJson, ZSttpClient}
 import com.bootes.config.Configuration.{KeycloakConfig, keycloakConfigDescription, keycloakConfigLayer, keycloakConfigValue}
-import com.bootes.dao.keycloak.Models.{Attributes, KeycloakError, KeycloakSuccess, KeycloakUser, ServiceContext}
+import com.bootes.dao.keycloak.Models.{Attributes, ApiResponseError, ApiResponseSuccess, KeycloakUser, ServiceContext}
 import com.bootes.dao.repository.{JSONB, UserRepository}
 import com.bootes.server.UserServer
 import com.bootes.server.UserServer.{CorrelationId, DebugJsonLog}
@@ -204,14 +204,14 @@ case class KeycloakUserServiceLive(console: Console.Service) extends UserService
                                                                                                 )
       url = s"${configValue.keycloak.url}/${configValue.keycloak.adminUsername}/realms/${configValue.keycloak.realm.getOrElse("")}/users"
       res <- {
-        ZSttpClient.post(url, inputRequest, classOf[KeycloakSuccess], FormUsingJson)
+        ZSttpClient.post(url, inputRequest, classOf[ApiResponseSuccess], FormUsingJson)
       }
       output <- {
         res match {
           case Right(data) =>
             ZIO.succeed(User.fromUserRecord(request))
           case Left(data) =>
-            val error: String = data.fromJson[KeycloakError].fold(s => s, c => c.errorMessage)
+            val error: String = data.fromJson[ApiResponseError].fold(s => s, c => c.errorMessage)
             log.locally(CorrelationId(serviceContext.requestId).andThen(DebugJsonLog(data)))(
               log.debug(s"Error for $url")
             ) &>
@@ -235,7 +235,7 @@ case class KeycloakUserServiceLive(console: Console.Service) extends UserService
     val result = for {
       configValue <- keycloakConfigValue
       _ <- log.locally(CorrelationId(serviceContext.requestId).andThen(DebugJsonLog(configValue.toString)))(
-        log.debug(s"Loaded config")
+        log.debug(s"Loaded config for getting all users")
       )
       url = s"${configValue.keycloak.url}/${configValue.keycloak.adminUsername}/realms/${configValue.keycloak.realm.getOrElse("")}/users"
       res <- {
@@ -246,7 +246,7 @@ case class KeycloakUserServiceLive(console: Console.Service) extends UserService
           case Right(data) =>
             ZIO.succeed(data.map(x => User.fromKeycloakUser(x)))
           case Left(data) =>
-            val error: String = data.fromJson[KeycloakError].fold(s => s, c => c.errorMessage)
+            val error: String = data.fromJson[ApiResponseError].fold(s => s, c => c.errorMessage)
             log.locally(CorrelationId(serviceContext.requestId).andThen(DebugJsonLog(data)))(
               log.debug(s"Error, $error for $url")
             ) &>

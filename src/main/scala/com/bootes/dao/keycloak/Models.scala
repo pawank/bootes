@@ -49,14 +49,17 @@ object Models {
     implicit val codec: JsonCodec[KeycloakUser] = DeriveJsonCodec.gen[KeycloakUser]
   }
 
-  case class KeycloakError(errorMessage: String)
-  object KeycloakError {
-    implicit val codec: JsonCodec[KeycloakError] = DeriveJsonCodec.gen[KeycloakError]
+
+  sealed trait ApiResponseMessage
+
+  case class ApiResponseError(code: Option[String] = None, errorMessage: String) extends ApiResponseMessage
+  object ApiResponseError {
+    implicit val codec: JsonCodec[ApiResponseError] = DeriveJsonCodec.gen[ApiResponseError]
   }
 
-  case class KeycloakSuccess(message: String)
-  object KeycloakSuccess{
-    implicit val codec: JsonCodec[KeycloakSuccess] = DeriveJsonCodec.gen[KeycloakSuccess]
+  case class ApiResponseSuccess(code: Option[String] = None, message: String) extends ApiResponseMessage
+  object ApiResponseSuccess{
+    implicit val codec: JsonCodec[ApiResponseSuccess] = DeriveJsonCodec.gen[ApiResponseSuccess]
   }
 
   case class ServiceContext(token: String, requestId: Option[UUID] = Option(UUID.randomUUID()))

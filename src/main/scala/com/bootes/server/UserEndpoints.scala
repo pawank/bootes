@@ -28,31 +28,21 @@ object UserEndpoints extends RequestOps {
       .collectM[Request] {
         case Method.GET -> Root / "bootes" / "v1" / "users" =>
           for {
-            _ <- ZIO.succeed(scribe.info("Getting list of all users"))
-            correlationId <- UIO(Some(UUID.randomUUID()))
-            _ <- log.locally(CorrelationId(Some(UUID.randomUUID())).andThen(DebugJsonLog("")))(
-              log.debug("Hello differently from ZIO logger")
+            //_ <- ZIO.succeed(scribe.info("Getting list of all users"))
+            _ <- log.locally(CorrelationId(serviceContext.requestId).andThen(DebugJsonLog(serviceContext.toString)))(
+              log.debug("Calling user service for fetching all users matching with criteria")
             )
-            _ <- zlog.withLogArgs(RequestKey(ClientRequest("src", "GET", "/foo")), CorrelationIdKey("someId")) {
-              zlog.info("Logic go brrrrr", CustomerIdKey(123))
-            }
-            _ <- log.locally(LogAnnotation.CorrelationId(correlationId)) {
-                log.debug("Hello from ZIO logger")
-            }
-            _ <- putStrLn(s"Validated claim: $jwtClaim")
+            //_ <- zlog.withLogArgs(RequestKey(ClientRequest("src", "GET", "/foo")), CorrelationIdKey("someId")) {
+            //  zlog.info("Logic go brrrrr", CustomerIdKey(123))
+            //}
             users <- UserService.all
-            _ <- log.locally(LogAnnotation.CorrelationId(correlationId)) {
-              log.debug("Done from ZIO logger")
-            }
           } yield Response.jsonString(users.toJson)
         case Method.GET -> Root / "bootes" / "v1" / "users" / id =>
           for {
-            _ <- putStrLn(s"Validated claim: $jwtClaim")
             user <- UserService.get(id.toInt)
           } yield Response.jsonString(user.toJson)
         case req@Method.POST -> Root / "bootes" / "v1" / "users" =>
           for {
-            _ <- putStrLn(s"Validated claim: $jwtClaim")
             request <- extractBodyFromJson[CreateUserRequest](req)
             results <- UserService.create(request)
           } yield Response.jsonString(results.toJson)

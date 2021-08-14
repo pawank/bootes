@@ -1,14 +1,30 @@
 package com.bootes.dao.keycloak
 
+import com.bootes.dao.keycloak.Models.Phone
 import zio.console.Console
 import zio.json.{DeriveJsonCodec, JsonCodec, JsonDecoder, JsonEncoder}
 import zio.macros.accessible
+import zio.prelude.{SubtypeSmart, Validation}
+import zio.test.Assertion._
 
 import java.util.UUID
 import java.util.concurrent.TimeUnit
 import scala.concurrent.duration.{DurationInt, FiniteDuration}
 
 object Models {
+
+  /*
+  Examples satisfying phone nos
+  123-456-7890
+(123) 456-7890
+123 456 7890
+123.456.7890
++91 (123) 456-7890
+   */
+  object Phone extends SubtypeSmart[String](matchesRegex("""^(\+\d{1,2}\s)?\(?\d{3}\)?[\s.-]?\d{3}[\s.-]?\d{4}$""")){
+    implicit val codec: JsonCodec[Phone] = DeriveJsonCodec.gen[Phone]
+  }
+  type Phone = Phone.type
 
   case class Access (
                       manageGroupMembership: Boolean,
@@ -22,9 +38,9 @@ object Models {
   }
 
   case class Attributes (
-                          phone: Option[Seq[String]] = None,
-                          phone2: Option[Seq[String]] = None,
-                          phone3: Option[Seq[String]] = None,
+                          phone: Option[Seq[Phone]] = None,
+                          phone2: Option[Seq[Phone]] = None,
+                          phone3: Option[Seq[Phone]] = None,
                           pancard: Option[Seq[String]] = None,
                           passport: Option[Seq[String]] = None
                         )

@@ -39,6 +39,7 @@ libraryDependencies ++= Seq(
   "dev.zio"                       %% "zio-opentracing"          % zioOpenTracingVersion,
   "dev.zio"                       %% "zio-streams"              % zioVersion,
   "dev.zio"                       %% "zio-kafka"                % "0.16.0",
+  //"dev.zio"                       %% "zio-json-interop-refined" % zioVersion,
   "io.d11"                        %% "zhttp"                    % zioHttpVersion,
   "io.getquill"                   %% "quill-jdbc-zio"           % quillVersion,
   "org.flywaydb"                   % "flyway-core"              % flywayVersion,

@@ -1,15 +1,18 @@
 package com.bootes.dao
 
+import com.bootes.client.{FormUsingJson, ZSttpClient}
 import com.bootes.config.Configuration.{KeycloakConfig, keycloakConfigDescription, keycloakConfigLayer, keycloakConfigValue}
 import com.bootes.dao.keycloak.Models.{Attributes, KeycloakError, KeycloakSuccess, KeycloakUser, ServiceContext}
 import com.bootes.dao.repository.{JSONB, UserRepository}
 import com.bootes.server.UserServer
+import com.bootes.server.UserServer.{CorrelationId, DebugJsonLog}
 import com.bootes.server.auth.ApiToken
 import com.bootes.server.auth.keycloak.KeycloakClientExample.{loginUrl, userCreateUrl, usersUrl}
 import io.getquill.Embedded
 import io.scalaland.chimney.dsl.TransformerOps
 import sttp.client3.{Response, basicRequest}
 import sttp.client3.asynchttpclient.zio.SttpClient
+import zio.clock.Clock
 import zio.{Has, IO, RIO, RLayer, Task, ZIO, system}
 import zio.console.Console
 import zio.json.{DeriveJsonCodec, JsonCodec}
@@ -191,107 +194,69 @@ case class UserServiceLive(repository: UserRepository, console: Console.Service)
 case class KeycloakUserServiceLive(console: Console.Service) extends UserService {
   import sttp.client3._
   import sttp.client3.asynchttpclient.zio._
-  val loginUrl: String                                   = "http://localhost:8180/auth/realms/master/protocol/openid-connect/token"
-  val usersUrl: String                                   = "http://localhost:8180/auth/admin/realms/rapidor/users"
 
-  override def create(request: CreateUserRequest)(implicit ctx: ServiceContext): Task[User] = {
-    import zio.config._
-    val token = ctx.token
-    val correlationId = ctx.requestId
-    val payload = CreateUserRequest.toKeycloakUser(request).toJson
-    val req = basicRequest.contentType("application/json").auth.bearer(token).body(payload).post(uri"$userCreateUrl")
-    println(s"Sending sttp create user request = $req")
-    val response: ZIO[SttpClient, Throwable, Response[Either[String, String]]] = send(req)
-    println(s"Response based on sttp create user = $response")
-    //val result: ZIO[SttpClient, Throwable, Either[String, KeycloakSuccess]] = for {
-    val result: ZIO[SttpClient with system.System with Logging, Serializable, Right[Nothing, KeycloakSuccess]] = for {
-      _ <- log.locally(LogAnnotation.CorrelationId(correlationId)) {
-        log.debug("create")
-      }
+  override def create(request: CreateUserRequest)(implicit serviceContext: ServiceContext): Task[User] = {
+    val inputRequest = CreateUserRequest.toKeycloakUser(request)
+      val result = for {
       configValue <- keycloakConfigValue
-      res <- response
+      _ <- log.locally(CorrelationId(serviceContext.requestId).andThen(DebugJsonLog(configValue.toString)))(
+                                                                                                log.debug(s"Loaded config")
+                                                                                                )
+      url = s"${configValue.keycloak.url}/${configValue.keycloak.masterRealm}/realms/${configValue.keycloak.realm.getOrElse("")}/users"
+      res <- {
+        ZSttpClient.post(url, inputRequest, classOf[KeycloakSuccess], FormUsingJson)
+      }
       output <- {
-        println(s"Config $configValue")
-        Task{res}.flatMap(r => {
-          println(s"Status code = ${r.code}")
-          (r.code.code == 200) || (r.code.code == 201) match {
-            case true =>
-              r.body match {
-                case Right(data) =>
-                  println(s"Sttp zio response for user create = ${data}")
-                  ZIO.succeed(Right(KeycloakSuccess(message = "Created")))
-                case Left(error) =>
-                  ZIO.fail(Left(s"<you shouldn't see this> $error"))
-              }
-            case _ =>
-              r.body match {
-                case Right(data) =>
-                  val success: String = data.fromJson[KeycloakError].fold(s => s, c => c.errorMessage)
-                  ZIO.fail(success)
-                case Left(data) =>
-                  println(s"Sttp zio response for user create = ${data}")
-                  val error: String = data.fromJson[KeycloakError].fold(s => s, c => c.errorMessage)
-                  ZIO.fail(Left(s"${error}"))
-              }
-          }
-        })
+        res match {
+          case Right(data) =>
+            ZIO.succeed(User.fromUserRecord(request))
+          case Left(data) =>
+            val error: String = data.fromJson[KeycloakError].fold(s => s, c => c.errorMessage)
+            log.locally(CorrelationId(serviceContext.requestId).andThen(DebugJsonLog(data)))(
+              log.debug(s"Error for $url")
+            ) &>
+            ZIO.fail(error)
+        }
       }
     } yield output
-    //ZIO.effect(User.sample)
-    result.map(r => User.fromUserRecord(request)).mapError(someError => {
-      someError match {
-        case Right(v) =>
-          new RuntimeException(s"Success: $v")
-        case Left(e) =>
-          new RuntimeException(s"Error: $e")
-      }
-    }).provideLayer(AsyncHttpClientZioBackend.layer() ++ system.System.live ++ UserServer.logLayer)
+    result
+      .mapError(someError =>
+              someError match {
+                case Right(v) =>
+                    new RuntimeException(s"Success: $v")
+                  case Left(e) =>
+                    new RuntimeException(s"Error: $e")
+                }
+        )
+      .provideLayer(Clock.live ++ UserServer.logLayer ++ system.System.live)
   }
 
-  override def all()(implicit ctx: ServiceContext): Task[Seq[User]] = {
-    val token = ctx.token
-    val req = basicRequest.auth.bearer(token).get(uri"$usersUrl")
-    println(s"Sending sttp create user request = $req")
-    val response: ZIO[SttpClient, Throwable, Response[Either[String, String]]] = send(req)
-    println(s"Response based on sttp create user = $response")
-    //val result: ZIO[SttpClient, Throwable, Either[String, KeycloakSuccess]] = for {
-    val result: ZIO[SttpClient, Serializable, Either[String, List[User]]] = for {
-      res <- response
+  override def all()(implicit serviceContext: ServiceContext): Task[Seq[User]] = {
+    val result = for {
+      configValue <- keycloakConfigValue
+      _ <- log.locally(CorrelationId(serviceContext.requestId).andThen(DebugJsonLog(configValue.toString)))(
+        log.debug(s"Loaded config")
+      )
+      url = s"${configValue.keycloak.url}/${configValue.keycloak.masterRealm}/realms/${configValue.keycloak.realm.getOrElse("")}/users"
+      res <- {
+        ZSttpClient.get(url, CreateUserRequest.sample, classOf[List[KeycloakUser]], FormUsingJson)
+      }
       output <- {
-        Task{res}.flatMap(r => {
-          println(s"Status code = ${r.code}")
-          (r.code.code == 200) || (r.code.code == 201) match {
-            case true =>
-              r.body match {
-                case Right(data) =>
-                  println(s"Sttp zio response for user create = ${data}")
-                  ZIO.succeed(data.fromJson[List[KeycloakUser]].map(xs => xs.map(x => User.fromKeycloakUser(x))))
-                case Left(error) =>
-                  ZIO.fail(Left(s"<you shouldn't see this> $error"))
-              }
-            case _ =>
-              r.body match {
-                case Right(data) =>
-                  val success: String = data.fromJson[KeycloakError].fold(s => s, c => c.errorMessage)
-                  ZIO.fail(success)
-                case Left(data) =>
-                  println(s"Sttp zio response for user create = ${data}")
-                  val error: String = data.fromJson[KeycloakError].fold(s => s, c => c.errorMessage)
-                  ZIO.fail(Left(s"${error}"))
-              }
-          }
-        })
+        res match {
+          case Right(data) =>
+            ZIO.succeed(data.map(x => User.fromKeycloakUser(x)))
+          case Left(data) =>
+            val error: String = data.fromJson[KeycloakError].fold(s => s, c => c.errorMessage)
+            log.locally(CorrelationId(serviceContext.requestId).andThen(DebugJsonLog(data)))(
+              log.debug(s"Error, $error for $url")
+            ) &>
+              ZIO.succeed(List.empty)
+        }
       }
     } yield output
-    //ZIO.effect(User.sample)
-    result.mapError(someError => {
-      someError match {
-        case Right(v) =>
-          new RuntimeException(s"Success: $v")
-        case Left(e) =>
-          new RuntimeException(s"Error: $e")
-      }
-    }).provideLayer(AsyncHttpClientZioBackend.layer()).map(v => if (v.isLeft) Seq.empty else v.toSeq.flatten)
+    result
+      .mapError(error => new RuntimeException(s"Error: $error") )
+      .provideLayer(AsyncHttpClientZioBackend.layer() ++ Clock.live ++ UserServer.logLayer ++ system.System.live)
   }
 
   override def get(id: Long)(implicit ctx: ServiceContext): Task[User] = ZIO.effect(User.sample)

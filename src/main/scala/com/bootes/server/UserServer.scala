@@ -33,16 +33,16 @@ object CustomerIdKey extends ZLogging.Key[Long]("customerId")
 object UserServer extends App {
   implicit val logger: ZLogger = ZLogger[UserServer.type]
 
-  final val CalculationId: LogAnnotation[Option[UUID]] = LogAnnotation[Option[UUID]](
-    name = "calculation-id",
+  final val CorrelationId: LogAnnotation[Option[UUID]] = LogAnnotation[Option[UUID]](
+    name = "correlation-id",
     initialValue = None,
     combine = (_, r) => r,
-    render = _.map(_.toString).getOrElse("undefined-calculation-id")
+    render = _.map(_.toString).getOrElse("undefined-correlation-id")
   )
 
-  final val CalculationNumber: LogAnnotation[Int] = LogAnnotation[Int](
-    name = "calculation-number",
-    initialValue = 0,
+  final val DebugJsonLog: LogAnnotation[String] = LogAnnotation[String](
+    name = "debug-json-log",
+    initialValue = "",
     combine = (_, r) => r,
     render = _.toString
   )
@@ -50,9 +50,9 @@ object UserServer extends App {
   final val logEnv: ZLayer[zio.console.Console with Clock, Nothing, Logging] =
     Logging.console(
       logLevel = LogLevel.Debug,
-      format = LogFormat.ColoredLogFormat((ctx, line) => s"${ctx(CalculationId)} ${ctx(CalculationNumber)} $line")
+      format = LogFormat.ColoredLogFormat((ctx, line) => s"${ctx(CorrelationId)} ${ctx(DebugJsonLog)} [$line]")
     ) >>>
-      Logging.withRootLoggerName("my-logger")
+      Logging.withRootLoggerName(s"UserServer")
 
   val logLayer: TaskLayer[Logging] = ZEnv.live >>> logEnv
 

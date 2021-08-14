@@ -4,7 +4,7 @@ import com.bootes.dao.keycloak.Models.ServiceContext
 import com.bootes.dao.repository.NotFoundException
 import com.bootes.dao.{CreateUserRequest, ResponseMessage, UserService}
 import com.bootes.dao.{CreateUserRequest, UserService}
-import com.bootes.server.UserServer.{CalculationId, CalculationNumber}
+import com.bootes.server.UserServer.{CorrelationId, DebugJsonLog}
 import com.bootes.server.auth.Token
 import pdi.jwt.JwtClaim
 import zhttp.http._
@@ -30,7 +30,7 @@ object UserEndpoints extends RequestOps {
           for {
             _ <- ZIO.succeed(scribe.info("Getting list of all users"))
             correlationId <- UIO(Some(UUID.randomUUID()))
-            _ <- log.locally(CalculationId(Some(UUID.randomUUID())).andThen(CalculationNumber(1)))(
+            _ <- log.locally(CorrelationId(Some(UUID.randomUUID())).andThen(DebugJsonLog("")))(
               log.debug("Hello differently from ZIO logger")
             )
             _ <- zlog.withLogArgs(RequestKey(ClientRequest("src", "GET", "/foo")), CorrelationIdKey("someId")) {

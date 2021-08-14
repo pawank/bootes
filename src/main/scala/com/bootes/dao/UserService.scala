@@ -209,6 +209,9 @@ case class KeycloakUserServiceLive(console: Console.Service) extends UserService
       output <- {
         res match {
           case Right(data) =>
+            log.locally(CorrelationId(serviceContext.requestId).andThen(DebugJsonLog(data.toString)))(
+              log.debug(s"Got response for $url")
+            ) &>
             ZIO.succeed(User.fromUserRecord(request))
           case Left(data) =>
             val error: String = data.fromJson[ApiResponseError].fold(s => s, c => c.errorMessage)

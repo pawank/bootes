@@ -1,10 +1,12 @@
 package com.bootes.dao.keycloak
 
 import zio.console.Console
-import zio.json.{DeriveJsonCodec, JsonCodec}
+import zio.json.{DeriveJsonCodec, JsonCodec, JsonDecoder, JsonEncoder}
 import zio.macros.accessible
 
 import java.util.UUID
+import java.util.concurrent.TimeUnit
+import scala.concurrent.duration.{DurationInt, FiniteDuration}
 
 object Models {
 
@@ -62,8 +64,10 @@ object Models {
     implicit val codec: JsonCodec[ApiResponseSuccess] = DeriveJsonCodec.gen[ApiResponseSuccess]
   }
 
-  case class ServiceContext(token: String, requestId: Option[UUID] = Option(UUID.randomUUID()))
+  case class ServiceContext(token: String, requestId: Option[UUID] = Option(UUID.randomUUID()), readTimeout: FiniteDuration = 30.seconds, connectTimeout: FiniteDuration = 5.seconds)
   object ServiceContext {
-    implicit val codec: JsonCodec[ServiceContext] = DeriveJsonCodec.gen[ServiceContext]
+    implicit val encoder: JsonEncoder[FiniteDuration] = JsonEncoder[Long].contramap(_._1)
+    implicit val decoder: JsonDecoder[FiniteDuration] = JsonDecoder[Long].map(FiniteDuration(_, TimeUnit.SECONDS))
+    //implicit val codec: JsonCodec[ServiceContext] = DeriveJsonCodec.gen[ServiceContext]
   }
 }

@@ -42,9 +42,9 @@ trait HttpClient {
         )
         val req = serviceContext.token match {
           case "" =>
-            basicRequest.get(uri"$url").readTimeout(5.minutes)
+            basicRequest.get(uri"$url").readTimeout(serviceContext.readTimeout)
           case _ =>
-            basicRequest.auth.bearer(serviceContext.token).get(uri"$url").readTimeout(5.minutes)
+            basicRequest.auth.bearer(serviceContext.token).get(uri"$url").readTimeout(serviceContext.readTimeout)
         }
         send(req)
       }
@@ -100,9 +100,9 @@ trait HttpClient {
         )
         val req = serviceContext.token match {
           case "" =>
-            basicRequest.get(uri"$url").readTimeout(5.minutes)
+            basicRequest.get(uri"$url").readTimeout(serviceContext.readTimeout)
           case _ =>
-            basicRequest.auth.bearer(serviceContext.token).get(uri"$url").readTimeout(5.minutes)
+            basicRequest.auth.bearer(serviceContext.token).get(uri"$url").readTimeout(serviceContext.readTimeout)
         }
         send(req)
       }
@@ -164,9 +164,9 @@ trait HttpClient {
                 )
                 serviceContext.token match {
                   case "" =>
-                    basicRequest.body(payload, "utf-8").post(uri"$url").readTimeout(5.minutes)
+                    basicRequest.body(payload, "utf-8").post(uri"$url").readTimeout(serviceContext.readTimeout)
                   case _ =>
-                    basicRequest.auth.bearer(serviceContext.token).body(payload, "utf-8").post(uri"$url").readTimeout(5.minutes)
+                    basicRequest.auth.bearer(serviceContext.token).body(payload, "utf-8").post(uri"$url").readTimeout(serviceContext.readTimeout)
                 }
               case FormUsingJson =>
                 val payload = inputRequest.toJson

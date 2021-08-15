@@ -1,6 +1,5 @@
 package com.bootes.dao.keycloak
 
-import org.apache.commons.validator.routines.EmailValidator
 import zio.console.Console
 import zio.json.{DeriveJsonCodec, JsonCodec, JsonDecoder, JsonEncoder}
 import zio.macros.accessible
@@ -13,7 +12,6 @@ import java.util.concurrent.TimeUnit
 import scala.concurrent.duration.{DurationInt, FiniteDuration}
 
 object Models {
-  val emailValidator:EmailValidator = EmailValidator.getInstance()
 
   /*
   Examples satisfying phone nos
@@ -60,6 +58,7 @@ object Models {
     implicit val codec: JsonCodec[Email] = DeriveJsonCodec.gen[Email]
   }
 
+
   case class Access (
                       manageGroupMembership: Boolean,
                       view: Boolean,
@@ -79,8 +78,6 @@ object Models {
                           passport: Option[Seq[String]] = None
                         )
   object Attributes {
-    import Phone._
-    import Email._
     implicit val codec: JsonCodec[Attributes] = DeriveJsonCodec.gen[Attributes]
   }
 
@@ -100,8 +97,6 @@ object Models {
                              access: Option[Access] = None
                            )
   object KeycloakUser {
-    import Phone._
-    import Email._
     implicit val codec: JsonCodec[KeycloakUser] = DeriveJsonCodec.gen[KeycloakUser]
   }
 

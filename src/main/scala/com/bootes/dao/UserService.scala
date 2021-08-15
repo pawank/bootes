@@ -2,7 +2,7 @@ package com.bootes.dao
 
 import com.bootes.client.{FormUsingJson, ZSttpClient}
 import com.bootes.config.Configuration.{KeycloakConfig, keycloakConfigDescription, keycloakConfigLayer, keycloakConfigValue}
-import com.bootes.dao.keycloak.Models.{Attributes, ApiResponseError, ApiResponseSuccess, KeycloakUser, ServiceContext}
+import com.bootes.dao.keycloak.Models.{ApiResponseError, ApiResponseSuccess, Attributes, Email, KeycloakUser, Phone, ServiceContext}
 import com.bootes.dao.repository.{JSONB, UserRepository}
 import com.bootes.server.UserServer
 import com.bootes.server.UserServer.{CorrelationId, DebugJsonLog}
@@ -20,6 +20,7 @@ import zio.macros.accessible
 import zio.console._
 import zio.json._
 import zio.logging.{LogAnnotation, Logging, log}
+import zio.prelude.Validation
 
 import java.time.{Instant, LocalDateTime, ZoneId, ZonedDateTime}
 import scala.language.implicitConversions
@@ -76,13 +77,15 @@ object LegalEntity {
 case class PiiInfo(firstName: String,
                    middleName: Option[String] = None,
                    lastName: String,
-                   email1: Option[String] = None,
+                   email1: Option[Email] = None,
                    email2: Option[String] = None,
                    email3: Option[String] = None,
-                   phone1: Option[String] = None,
+                   phone1: Option[Phone] = None,
                    phone2: Option[String] = None,
                    phone3: Option[String] = None) extends Embedded
 object PiiInfo {
+  import Email._
+  import Phone._
   implicit val codec: JsonCodec[PiiInfo] = DeriveJsonCodec.gen[PiiInfo]
 }
 

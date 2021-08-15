@@ -1,7 +1,7 @@
 package com.bootes.server.auth.keycloak
 
 import com.bootes.dao.User
-import com.bootes.dao.keycloak.Models.{ApiResponseError, ApiResponseSuccess, KeycloakUser}
+import com.bootes.dao.keycloak.Models.{ApiResponseError, ApiResponseSuccess, Email, KeycloakUser}
 import com.bootes.server.auth.{ApiLoginRequest, ApiToken, LoginRequest}
 import nl.vroste.rezilience.RateLimiter
 import sttp.client3.SttpBackend
@@ -103,7 +103,7 @@ object KeycloakClientExample extends App {
               import sttp.client3._
               import sttp.client3.asynchttpclient.zio.AsyncHttpClientZioBackend
               AsyncHttpClientZioBackend.managed().use { backend =>
-                val payload = KeycloakUser(username = "pawan5", firstName = "pawan", lastName = "kumar", email = Some("pawan5@test.com")).toJson
+                val payload = KeycloakUser(username = "pawan5", firstName = "pawan", lastName = "kumar", email = Some(Email("pawan5@test.com"))).toJson
                 val req = basicRequest.contentType("application/json").auth.bearer(token).body(payload).post(uri"$userCreateUrl")
                 println(s"Sending sttp create user request = $req")
                 val res: Task[Response[Either[String, String]]] = req.send(backend)

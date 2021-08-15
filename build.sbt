@@ -63,6 +63,7 @@ libraryDependencies ++= Seq(
   "com.outr"                      %% "scribe"                   % "3.4.0",
   "com.outr"                      %% "scribe-slf4j"             % "3.4.0",
   "com.softwaremill.sttp.client3" %% "scribe-backend"           % "3.3.13",
+  "commons-validator"             % "commons-validator"         % "1.7",
   "dev.zio"                       %% "zio-test"                 % zioVersion % Test,
   "dev.zio"                       %% "zio-test-sbt"             % zioVersion % Test,
   "dev.zio"                       %% "zio-test-magnolia"        % zioVersion % Test

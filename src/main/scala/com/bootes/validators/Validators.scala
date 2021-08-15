@@ -1,8 +1,10 @@
 package com.bootes.validators
 
 import com.bootes.dao.keycloak.Models.{Email, Phone}
+import com.bootes.server.auth.Token
 import org.apache.commons.validator.routines.EmailValidator
 import zio.prelude.Validation
+import zio.test.Assertion
 import zio.test.Assertion._
 
 object Validators {
@@ -30,4 +32,6 @@ object Validators {
     case true => Validation.succeed(value)
     case false => Validation.fail(s"Name value seems to be invalid, $value")
   }
+
+  def validateToken(value: String):Validation[String, Token] = Validation.fromPredicateWith(s"Token value seems to be invalid, $value")(Token(value))(token => isNonEmptyString.test(value) && (isGreaterThan(1000) && isLessThan(2000)).test(value.size))
 }

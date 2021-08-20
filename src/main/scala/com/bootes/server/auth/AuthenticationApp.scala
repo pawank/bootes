@@ -21,15 +21,12 @@ object Token {
 
 case class FailedLogin(user: String)
 
-case class LoginRequest(username: String, password: String, clientId: Option[String] = None)
-
-object LoginRequest {
-  implicit val codec: JsonCodec[LoginRequest] = DeriveJsonCodec.gen[LoginRequest]
-}
 
 case class AuthenticatedUser(username: String)
 
-case class ApiLoginRequest(scope: String, client_id: String, client_secret: String, grant_type: String, username: String, password: String)
+case class ApiLoginRequest(scope: String, client_id: String, client_secret: String, grant_type: String, username: String, password: String) {
+  val isAdminCli = client_id.equalsIgnoreCase("admin-cli")
+}
 
 object ApiLoginRequest {
   implicit val codec: JsonCodec[ApiLoginRequest] = DeriveJsonCodec.gen[ApiLoginRequest]
@@ -50,6 +47,17 @@ object TokenValidationRequest {
   val appClientSecret = System.getenv("APP_CLIENT_SECRET")
   val appClientId = System.getenv("APP_CLIENT_ID")
   def makeRequest(token: Token) = TokenValidationRequest(client_id = appClientId, client_secret = appClientSecret, token = token.value)
+  def makeAdminRequest(token: Token) = TokenValidationRequest(client_id = clientId, client_secret = clientSecret, token = token.value)
+}
+
+case class LoginRequest(username: String, password: String, clientId: Option[String] = None) {
+  val isAdminCli = clientId.getOrElse("").equalsIgnoreCase("admin-cli")
+}
+
+object LoginRequest {
+  implicit val codec: JsonCodec[LoginRequest] = DeriveJsonCodec.gen[LoginRequest]
+
+  val adminLoginRequest = LoginRequest(username = ApiLoginRequest.requestedUsername, password = ApiLoginRequest.requestedPassword, clientId = Some("admin-cli"))
 }
 
 case class ApiToken (
@@ -77,6 +85,8 @@ object AuthenticationApp extends RequestOps {
   val SECRET_KEY = "secretKey"
 
   implicit val clock: java.time.Clock = java.time.Clock.systemUTC
+
+   val ADMIN_TOKEN_MAP:Map[String, ApiToken] = Map.empty
 
   // Helper to encode the JWT token
   def jwtEncode(username: String): String = {
@@ -122,10 +132,23 @@ object AuthenticationApp extends RequestOps {
         } else ZIO.fail(s"Bearer token, $header is invalid")
       }
       tt <- {
-        getApiToken(token)
+        getApiToken(token, false)
+      }
+      adminTT <- {
+        println(s"tt = $tt")
+        if (tt.active.getOrElse(false)) {
+          //val adminToken = ADMIN_TOKEN_MAP.get("admin").map(a => a.access_token.getOrElse("")).getOrElse("")
+          //getApiToken(Token(adminToken), true)
+          println(s"ADMIN token = ${ADMIN_TOKEN_MAP.get("admin")}")
+          ZIO.succeed(ADMIN_TOKEN_MAP.get("admin"))
+          performLogin(LoginRequest.adminLoginRequest)
+        } else ZIO.fail(s"Admin token has expired")
       }
       r <- {
-        if (tt.active.getOrElse(false)) ZIO.succeed(Option(tt)) else ZIO.fail(s"Bearer token has expired for username, ${tt.username}")
+        val isActive = adminTT.access_token.getOrElse("").nonEmpty
+        //val isActive = adminTT.map(_.active.getOrElse(false)).getOrElse(false)
+        if (isActive) ZIO.succeed(Option(adminTT)) else ZIO.fail(s"Bearer token has expired for username, ${tt.username}")
+        //if (adminTT.active.getOrElse(false)) ZIO.succeed(Option(adminTT)) else ZIO.fail(s"Bearer token has expired for username, ${tt.username}")
       }
     } yield r).catchAll(ex => {
       log.locally(CorrelationId(serviceContext.requestId).andThen(DebugJsonLog("")))(
@@ -145,10 +168,12 @@ object AuthenticationApp extends RequestOps {
   //def authenticate[R, E](fail: HttpApp[R, E], success: JwtClaim => HttpApp[R, E]): HttpApp[R, E] = Http.flatten {
   def authenticate[R, E](fail: HttpApp[R, E], success: ApiToken => HttpApp[R, E]): HttpApp[R, E] = Http.flatten {
       Http
-        .fromFunction[Request] {
-          _.getHeader("Authorization")
+        .fromFunction[Request] { req =>
+          req.getHeader("Authorization")
             .flatMap(header => {
               implicit val serviceContext = ServiceContext(token = getMaybeToken(header.value.toString.trim).getOrElse(""))
+              println(header)
+              println(s"SC = $serviceContext")
               getToken(serviceContext.token)
             })
             //.flatMap(header => jwtDecode(header.value.toString))
@@ -161,8 +186,12 @@ object AuthenticationApp extends RequestOps {
       for {
         loginRequest      <- extractBodyFromJson[LoginRequest](req)
         authenticatedUser <- validateLogin(loginRequest)
+        adminUser         <- {
+          if (!ADMIN_TOKEN_MAP.contains("admin")) {
+            validateLogin(LoginRequest.adminLoginRequest.copy(clientId = Some("admin-cli")))
+          } else ZIO.fail(FailedLogin(s"Admin login failed"))
+        }
         jwtClaim          <- ZIO.effect(authenticatedUser.username)
-        //jwtClaim          <- ZIO.effect(jwtEncode(authenticatedUser.username))
       } yield Response.text(jwtClaim)
     }
     .catchAll { case FailedLogin(user) =>
@@ -178,9 +207,9 @@ object AuthenticationApp extends RequestOps {
     }
   }
 
-  def validateLogin(request: LoginRequest): ZIO[Logging with Clock with system.System, FailedLogin, AuthenticatedUser] = {
-    val apiLoginRequest = ApiLoginRequest.getLoginRequest(request.clientId.getOrElse("")).copy(username = request.username, password = request.password)
-    val r: ZIO[Logging with Clock with system.System, Object, AuthenticatedUser] = for {
+  def performLogin(request: LoginRequest): ZIO[Logging with Clock with system.System, FailedLogin, ApiToken] = {
+    val apiLoginRequest = if (request.isAdminCli) ApiLoginRequest.getLoginRequest(request.clientId.getOrElse("")).copy(username = ApiLoginRequest.default.username, password = ApiLoginRequest.default.password) else ApiLoginRequest.getLoginRequest(request.clientId.getOrElse("")).copy(username = request.username, password = request.password)
+    val r: ZIO[Logging with Clock with system.System, Object, ApiToken] = for {
       configValue <- keycloakConfigValue
       url = getLoginUrl(configValue, request)
       maybeToken <- {
@@ -189,8 +218,7 @@ object AuthenticationApp extends RequestOps {
       value <- {
         maybeToken match {
           case Right(tokenObject) =>
-            val token = tokenObject.access_token
-            ZIO.succeed(AuthenticatedUser(token.getOrElse("")))
+              ZIO.succeed(tokenObject)
           case Left(error) =>
             ZIO.fail(FailedLogin(error))
         }
@@ -199,19 +227,38 @@ object AuthenticationApp extends RequestOps {
     r.mapError(e => FailedLogin(s"${e.toString}"))
   }
 
-  def getApiToken(token: Token): ZIO[Logging with Clock with system.System, FailedLogin, ApiToken] = {
+  def validateLogin(request: LoginRequest): ZIO[Logging with Clock with system.System, FailedLogin, AuthenticatedUser] = {
+    performLogin(request).map(u => AuthenticatedUser(u.access_token.getOrElse("")))
+  }
+
+  def getTokenValidityCheckUrl(configValue: KeycloakConfig, isAdmin: Boolean): String = {
+    if (isAdmin)
+      s"${configValue.keycloak.url}/realms/${configValue.keycloak.masterRealm}/protocol/openid-connect/token/introspect"
+      else
+      s"${configValue.keycloak.url}/realms/${configValue.keycloak.realm.getOrElse("")}/protocol/openid-connect/token/introspect"
+  }
+
+  def getCachedAdminToken(): Option[String] = ADMIN_TOKEN_MAP.get("admin").map(a => a.access_token.getOrElse(""))
+
+  def getApiToken(inputToken: Token, isAdmin: Boolean): ZIO[Logging with Clock with system.System, FailedLogin, ApiToken] = {
+    val token: Token = if (isAdmin) Token(getCachedAdminToken().getOrElse("")) else inputToken
     implicit val serviceContext = ServiceContext(token = token.value)
-    val request = TokenValidationRequest.makeRequest(token)
+    val request = if (isAdmin) TokenValidationRequest.makeAdminRequest(token) else TokenValidationRequest.makeRequest(token)
     val r: ZIO[Logging with Clock with system.System, Object, ApiToken] = for {
       configValue <- keycloakConfigValue
-      url = s"${configValue.keycloak.url}/realms/${configValue.keycloak.realm.getOrElse("")}/protocol/openid-connect/token/introspect"
+      url = getTokenValidityCheckUrl(configValue, isAdmin)
       maybeToken <- {
         ZSttpClient.post(url, request, classOf[ApiToken], FormUrlEncoded).mapError(e => FailedLogin(s"${e.toString}"))
       }
       value <- {
         maybeToken match {
           case Right(tokenObject) =>
-            ZIO.succeed(tokenObject)
+            ZIO.effect({
+              if (isAdmin && !tokenObject.active.getOrElse(false)) {
+                validateLogin(LoginRequest.adminLoginRequest)
+              }
+            }) &>
+            ZIO.succeed(tokenObject.copy(access_token = Some(token.value)))
           case Left(error) =>
             ZIO.fail(FailedLogin(error))
         }

@@ -56,7 +56,7 @@ trait HttpClient {
               r.body match {
                 case Right(data) =>
                   val xs = data.fromJson[U]
-                  log.locally(CorrelationId(serviceContext.requestId).andThen(DebugJsonLog(if (xs.isLeft) xs.left.toOption.getOrElse("Error in getting error projection of the response") else "JSON prepared from the response")))(
+                  log.locally(CorrelationId(serviceContext.requestId).andThen(DebugJsonLog(if (xs.isLeft) xs.left.toOption.getOrElse("Error in getting error projection of the response") else "JSON fetched and prepared from the response")))(
                     log.debug(s"Received response for $url")
                   ) &> {
                     ZIO.succeed(xs)
@@ -183,6 +183,7 @@ trait HttpClient {
                   log.locally(CorrelationId(serviceContext.requestId).andThen(DebugJsonLog(if (xs.isLeft) xs.left.toOption.getOrElse("Error in getting error projection of the response") else "JSON prepared from the response")))(
                       log.debug(s"Received response $data for $url")
                   ) &> {
+                    println(s"DATA = $xs")
                     ZIO.succeed(xs)
                   }
                 case Left(error) =>

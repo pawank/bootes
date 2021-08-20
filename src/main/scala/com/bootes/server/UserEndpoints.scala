@@ -49,9 +49,6 @@ object UserEndpoints extends RequestOps {
           Http.fail(HttpError.NotFound(Root / "bootes" / "v1" / "users" / id.toString))
         case ex: Throwable =>
           Http.fail(HttpError.InternalServerError(msg = ex.getMessage, cause = None))
-          //Http.fail(HttpError.InternalServerError(msg = ex.getMessage, cause = Option(ex)))
-        //val error = ResponseMessage(status = false, code = 501, message = ex.getMessage, details = Option(ex.getStackTrace.mkString))
-        //Http.succeed(Response.jsonString(error.toJson))
         case err => Http.fail(HttpError.InternalServerError(msg = err.toString))
       }
   }

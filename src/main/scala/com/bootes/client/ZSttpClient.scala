@@ -114,7 +114,7 @@ trait HttpClient {
               r.body match {
                 case Right(data) =>
                   val xs = data.fromJson[List[U]]
-                  log.locally(CorrelationId(serviceContext.requestId).andThen(DebugJsonLog(if (xs.isLeft) xs.left.toOption.getOrElse("Error in getting error projection of the response") else "JSON prepared from the response")))(
+                  log.locally(CorrelationId(serviceContext.requestId).andThen(DebugJsonLog(if (xs.isLeft) xs.left.toOption.getOrElse("Error in getting error projection of the response") else "JSON prepared from the collection response")))(
                     log.debug(s"Received response for $url")
                   ) &> {
                     ZIO.succeed(xs)
@@ -181,9 +181,9 @@ trait HttpClient {
                 case Right(data) =>
                   val xs = data.fromJson[U]
                   log.locally(CorrelationId(serviceContext.requestId).andThen(DebugJsonLog(if (xs.isLeft) xs.left.toOption.getOrElse("Error in getting error projection of the response") else "JSON prepared from the response")))(
-                      log.debug(s"Received response $data for $url")
+                      log.debug(s"Received response and parsing successful for $url")
                   ) &> {
-                    println(s"DATA = $xs")
+                    //println(s"DATA = $xs")
                     ZIO.succeed(xs)
                   }
                 case Left(error) =>
@@ -244,9 +244,8 @@ object ZSttpClient extends App with HttpClient {
     rateLimiter
   }
 
-  def login(url: String, inputLoginRequest: Option[ApiLoginRequest]): ZIO[Logging with Clock, Serializable, Either[String, ApiToken]] = {
+  def login(url: String, inputLoginRequest: Option[ApiLoginRequest])(implicit serviceContext: ServiceContext): ZIO[Logging with Clock, Serializable, Either[String, ApiToken]] = {
     val currentLoginRequest =  inputLoginRequest.getOrElse(ApiLoginRequest.default)
-    implicit val ctx = ServiceContext(token = "")
     post(url, currentLoginRequest, classOf[ApiToken], FormUrlEncoded)
   }
 
@@ -254,7 +253,10 @@ object ZSttpClient extends App with HttpClient {
     for {
       configValue <- keycloakConfigValue
       url = s"${configValue.keycloak.url}/realms/${configValue.keycloak.masterRealm}/protocol/openid-connect/token"
-      response <- login(url, Some(ApiLoginRequest.default))
+      response <- {
+        implicit val serviceContext = ServiceContext("", requestId = ServiceContext.newRequestId())
+        login(url, Some(ApiLoginRequest.default))
+      }
       //users         <- login >>= getUsers
       _             <- putStrLn(s"Found login response:\n\t${response}\n")
     } yield ()

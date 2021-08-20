@@ -116,12 +116,13 @@ object Models {
     implicit val codec: JsonCodec[ApiResponseSuccess] = DeriveJsonCodec.gen[ApiResponseSuccess]
   }
 
-  case class ServiceContext(token: String, requestId: Option[UUID] = Option(UUID.randomUUID()), readTimeout: FiniteDuration = 30.seconds, connectTimeout: FiniteDuration = 5.seconds) {
+  case class ServiceContext(token: String, requestId: UUID, readTimeout: FiniteDuration = 30.seconds, connectTimeout: FiniteDuration = 5.seconds) {
     override def toString: String = s"Token: ****** for requestId: $requestId"
   }
   object ServiceContext {
     implicit val encoder: JsonEncoder[FiniteDuration] = JsonEncoder[Long].contramap(_._1)
     implicit val decoder: JsonDecoder[FiniteDuration] = JsonDecoder[Long].map(FiniteDuration(_, TimeUnit.SECONDS))
     //implicit val codec: JsonCodec[ServiceContext] = DeriveJsonCodec.gen[ServiceContext]
+    def newRequestId() = UUID.randomUUID()
   }
 }

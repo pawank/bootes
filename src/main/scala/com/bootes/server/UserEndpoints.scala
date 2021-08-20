@@ -22,8 +22,8 @@ object UserEndpoints extends RequestOps {
   implicit val logger: ZLogger = ZLogger[UserServer.type]
 
   val user: ApiToken => Http[Has[UserService] with Console with Logging with ZLogging, HttpError, Request, UResponse] = jwtClaim => {
-    scribe.debug(s"Claim found $jwtClaim")
-    implicit val serviceContext: ServiceContext = ServiceContext(token = jwtClaim.access_token.getOrElse(""))
+    scribe.debug(s"Claim found for ${jwtClaim.name}")
+    implicit val serviceContext: ServiceContext = ServiceContext(token = jwtClaim.access_token.getOrElse(""), requestId = UUID.fromString(jwtClaim.requestId.getOrElse("")))
     Http
       .collectM[Request] {
         case Method.GET -> Root / "bootes" / "v1" / "users" =>

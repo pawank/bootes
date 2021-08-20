@@ -14,6 +14,8 @@ import zio.json.{DeriveJsonCodec, JsonCodec}
 import zio.logging.{Logging, log}
 import zio.{IO, ZIO, system}
 
+import java.util.UUID
+
 case class Token(value: String) extends AnyVal
 object Token {
   implicit val codec: JsonCodec[Token] = DeriveJsonCodec.gen[Token]
@@ -74,7 +76,8 @@ case class ApiToken (
                       active: Option[Boolean],
                       name: Option[String],
                       email: Option[String],
-                      username: Option[String]
+                      username: Option[String],
+                      requestId: Option[String]
                     )
 object ApiToken{
   implicit val codec: JsonCodec[ApiToken] = DeriveJsonCodec.gen[ApiToken]
@@ -85,8 +88,6 @@ object AuthenticationApp extends RequestOps {
   val SECRET_KEY = "secretKey"
 
   implicit val clock: java.time.Clock = java.time.Clock.systemUTC
-
-   val ADMIN_TOKEN_MAP:Map[String, ApiToken] = Map.empty
 
   // Helper to encode the JWT token
   def jwtEncode(username: String): String = {
@@ -132,26 +133,27 @@ object AuthenticationApp extends RequestOps {
         } else ZIO.fail(s"Bearer token, $header is invalid")
       }
       tt <- {
-        getApiToken(token, false)
+        getApiToken(token)
       }
       adminTT <- {
-        println(s"tt = $tt")
         if (tt.active.getOrElse(false)) {
-          //val adminToken = ADMIN_TOKEN_MAP.get("admin").map(a => a.access_token.getOrElse("")).getOrElse("")
-          //getApiToken(Token(adminToken), true)
-          println(s"ADMIN token = ${ADMIN_TOKEN_MAP.get("admin")}")
-          ZIO.succeed(ADMIN_TOKEN_MAP.get("admin"))
-          performLogin(LoginRequest.adminLoginRequest)
+          log.locally(CorrelationId(serviceContext.requestId).andThen(DebugJsonLog(tt.name.getOrElse(""))))(
+            log.debug(s"Received valid token and now fetching admin token")
+          ) &> performLogin(LoginRequest.adminLoginRequest)
         } else ZIO.fail(s"Admin token has expired")
       }
       r <- {
         val isActive = adminTT.access_token.getOrElse("").nonEmpty
         //val isActive = adminTT.map(_.active.getOrElse(false)).getOrElse(false)
-        if (isActive) ZIO.succeed(Option(adminTT)) else ZIO.fail(s"Bearer token has expired for username, ${tt.username}")
+        if (isActive) {
+          log.locally(CorrelationId(serviceContext.requestId).andThen(DebugJsonLog(adminTT.name.getOrElse(""))))(
+            log.debug(s"Received valid token for admin now")
+          ) &> ZIO.succeed(Option(adminTT))
+        } else ZIO.fail(s"Bearer token has expired for username, ${tt.username}")
         //if (adminTT.active.getOrElse(false)) ZIO.succeed(Option(adminTT)) else ZIO.fail(s"Bearer token has expired for username, ${tt.username}")
       }
     } yield r).catchAll(ex => {
-      log.locally(CorrelationId(serviceContext.requestId).andThen(DebugJsonLog("")))(
+      log.locally(CorrelationId(serviceContext.requestId).andThen(DebugJsonLog("Please check input token")))(
         log.debug(s"Error while checking validity of the token, ${ex}")
       ) &>
       ZIO.succeed(None.asInstanceOf[Option[ApiToken]])
@@ -171,9 +173,7 @@ object AuthenticationApp extends RequestOps {
         .fromFunction[Request] { req =>
           req.getHeader("Authorization")
             .flatMap(header => {
-              implicit val serviceContext = ServiceContext(token = getMaybeToken(header.value.toString.trim).getOrElse(""))
-              println(header)
-              println(s"SC = $serviceContext")
+              implicit val serviceContext = ServiceContext(token = getMaybeToken(header.value.toString.trim).getOrElse(""), requestId = ServiceContext.newRequestId)
               getToken(serviceContext.token)
             })
             //.flatMap(header => jwtDecode(header.value.toString))
@@ -185,11 +185,9 @@ object AuthenticationApp extends RequestOps {
     .collectM[Request] { case req @ Method.POST -> Root / "bootes" / "v1" / "login" =>
       for {
         loginRequest      <- extractBodyFromJson[LoginRequest](req)
-        authenticatedUser <- validateLogin(loginRequest)
-        adminUser         <- {
-          if (!ADMIN_TOKEN_MAP.contains("admin")) {
-            validateLogin(LoginRequest.adminLoginRequest.copy(clientId = Some("admin-cli")))
-          } else ZIO.fail(FailedLogin(s"Admin login failed"))
+        authenticatedUser <- {
+          implicit val serviceContext = ServiceContext("", requestId = ServiceContext.newRequestId())
+          validateLogin(loginRequest)
         }
         jwtClaim          <- ZIO.effect(authenticatedUser.username)
       } yield Response.text(jwtClaim)
@@ -207,7 +205,7 @@ object AuthenticationApp extends RequestOps {
     }
   }
 
-  def performLogin(request: LoginRequest): ZIO[Logging with Clock with system.System, FailedLogin, ApiToken] = {
+  def performLogin(request: LoginRequest)(implicit serviceContext: ServiceContext): ZIO[Logging with Clock with system.System, FailedLogin, ApiToken] = {
     val apiLoginRequest = if (request.isAdminCli) ApiLoginRequest.getLoginRequest(request.clientId.getOrElse("")).copy(username = ApiLoginRequest.default.username, password = ApiLoginRequest.default.password) else ApiLoginRequest.getLoginRequest(request.clientId.getOrElse("")).copy(username = request.username, password = request.password)
     val r: ZIO[Logging with Clock with system.System, Object, ApiToken] = for {
       configValue <- keycloakConfigValue
@@ -218,7 +216,7 @@ object AuthenticationApp extends RequestOps {
       value <- {
         maybeToken match {
           case Right(tokenObject) =>
-              ZIO.succeed(tokenObject)
+              ZIO.succeed(tokenObject.copy(requestId = Some(serviceContext.requestId.toString)))
           case Left(error) =>
             ZIO.fail(FailedLogin(error))
         }
@@ -227,7 +225,7 @@ object AuthenticationApp extends RequestOps {
     r.mapError(e => FailedLogin(s"${e.toString}"))
   }
 
-  def validateLogin(request: LoginRequest): ZIO[Logging with Clock with system.System, FailedLogin, AuthenticatedUser] = {
+  def validateLogin(request: LoginRequest)(implicit serviceContext: ServiceContext): ZIO[Logging with Clock with system.System, FailedLogin, AuthenticatedUser] = {
     performLogin(request).map(u => AuthenticatedUser(u.access_token.getOrElse("")))
   }
 
@@ -238,27 +236,19 @@ object AuthenticationApp extends RequestOps {
       s"${configValue.keycloak.url}/realms/${configValue.keycloak.realm.getOrElse("")}/protocol/openid-connect/token/introspect"
   }
 
-  def getCachedAdminToken(): Option[String] = ADMIN_TOKEN_MAP.get("admin").map(a => a.access_token.getOrElse(""))
-
-  def getApiToken(inputToken: Token, isAdmin: Boolean): ZIO[Logging with Clock with system.System, FailedLogin, ApiToken] = {
-    val token: Token = if (isAdmin) Token(getCachedAdminToken().getOrElse("")) else inputToken
-    implicit val serviceContext = ServiceContext(token = token.value)
-    val request = if (isAdmin) TokenValidationRequest.makeAdminRequest(token) else TokenValidationRequest.makeRequest(token)
+  def getApiToken(inputToken: Token)(implicit serviceContext: ServiceContext): ZIO[Logging with Clock with system.System, FailedLogin, ApiToken] = {
+    val token: Token = inputToken
+    val request = TokenValidationRequest.makeRequest(token)
     val r: ZIO[Logging with Clock with system.System, Object, ApiToken] = for {
       configValue <- keycloakConfigValue
-      url = getTokenValidityCheckUrl(configValue, isAdmin)
+      url = getTokenValidityCheckUrl(configValue, false)
       maybeToken <- {
         ZSttpClient.post(url, request, classOf[ApiToken], FormUrlEncoded).mapError(e => FailedLogin(s"${e.toString}"))
       }
       value <- {
         maybeToken match {
           case Right(tokenObject) =>
-            ZIO.effect({
-              if (isAdmin && !tokenObject.active.getOrElse(false)) {
-                validateLogin(LoginRequest.adminLoginRequest)
-              }
-            }) &>
-            ZIO.succeed(tokenObject.copy(access_token = Some(token.value)))
+            ZIO.succeed(tokenObject.copy(access_token = Some(token.value), requestId = Some(serviceContext.requestId.toString)))
           case Left(error) =>
             ZIO.fail(FailedLogin(error))
         }

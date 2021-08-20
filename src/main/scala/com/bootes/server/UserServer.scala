@@ -33,11 +33,11 @@ object CustomerIdKey extends ZLogging.Key[Long]("customerId")
 object UserServer extends App {
   implicit val logger: ZLogger = ZLogger[UserServer.type]
 
-  final val CorrelationId: LogAnnotation[Option[UUID]] = LogAnnotation[Option[UUID]](
+  final val CorrelationId: LogAnnotation[UUID] = LogAnnotation[UUID](
     name = "correlation-id",
-    initialValue = None,
+    initialValue = UUID.randomUUID(),
     combine = (_, r) => r,
-    render = _.map(_.toString).getOrElse("undefined-correlation-id")
+    render = _.toString
   )
 
   final val DebugJsonLog: LogAnnotation[String] = LogAnnotation[String](

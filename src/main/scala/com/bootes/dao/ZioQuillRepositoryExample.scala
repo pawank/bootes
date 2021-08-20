@@ -7,7 +7,7 @@ import zio.console._
 import zio.magic._
 
 object ZioQuillRepositoryExample extends App {
-  implicit val serviceContext: ServiceContext = ServiceContext(token = "")
+  implicit val serviceContext = ServiceContext("", requestId = ServiceContext.newRequestId())
 
   val items = Seq(CreateUserRequest.sample)
 

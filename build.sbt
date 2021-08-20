@@ -21,7 +21,7 @@ val flywayVersion     = "7.9.1"
 val zioConfigVersion  = "1.0.5"
 val tapirVersion      = "0.18.0-M11"
 val chimneyVersion    = "0.6.1"
-val sttpVersion       = "3.3.9"
+val sttpVersion       = "3.3.13"
 
 scalacOptions += "-Ymacro-annotations"
 
@@ -49,6 +49,7 @@ libraryDependencies ++= Seq(
   "io.scalaland"                  %% "chimney"                  % chimneyVersion,
   "com.softwaremill.sttp.client3" %% "httpclient-backend-zio"   % sttpVersion,
   "com.softwaremill.sttp.client3" %% "async-http-client-backend-zio" % sttpVersion,
+  //"com.softwaremill.sttp.client3" %% "slf4j-backend"            % "3.3.13",
   "com.github.jwt-scala"          %% "jwt-core"                 % "8.0.2",
   "org.postgresql"                 % "postgresql"               % "42.2.8",
   "ch.qos.logback"                 % "logback-classic"          % "1.2.3",

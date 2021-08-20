@@ -5,7 +5,7 @@ import com.bootes.dao.repository.NotFoundException
 import com.bootes.dao.{CreateUserRequest, ResponseMessage, UserService}
 import com.bootes.dao.{CreateUserRequest, UserService}
 import com.bootes.server.UserServer.{CorrelationId, DebugJsonLog}
-import com.bootes.server.auth.Token
+import com.bootes.server.auth.{ApiToken, Token}
 import pdi.jwt.JwtClaim
 import zhttp.http._
 import zio.console._
@@ -21,9 +21,9 @@ object UserEndpoints extends RequestOps {
   import com.github.mvv.zilog.{Logging => ZLogging, Logger => ZLogger, log => zlog}
   implicit val logger: ZLogger = ZLogger[UserServer.type]
 
-  val user: Token => Http[Has[UserService] with Console with Logging with ZLogging, HttpError, Request, UResponse] = jwtClaim => {
+  val user: ApiToken => Http[Has[UserService] with Console with Logging with ZLogging, HttpError, Request, UResponse] = jwtClaim => {
     scribe.debug(s"Claim found $jwtClaim")
-    implicit val serviceContext: ServiceContext = ServiceContext(token = jwtClaim.value)
+    implicit val serviceContext: ServiceContext = ServiceContext(token = jwtClaim.access_token.getOrElse(""))
     Http
       .collectM[Request] {
         case Method.GET -> Root / "bootes" / "v1" / "users" =>
@@ -32,9 +32,6 @@ object UserEndpoints extends RequestOps {
             _ <- log.locally(CorrelationId(serviceContext.requestId).andThen(DebugJsonLog(serviceContext.toString)))(
               log.debug("Calling user service for fetching all users matching with criteria")
             )
-            //_ <- zlog.withLogArgs(RequestKey(ClientRequest("src", "GET", "/foo")), CorrelationIdKey("someId")) {
-            //  zlog.info("Logic go brrrrr", CustomerIdKey(123))
-            //}
             users <- UserService.all
           } yield Response.jsonString(users.toJson)
         case Method.GET -> Root / "bootes" / "v1" / "users" / id =>

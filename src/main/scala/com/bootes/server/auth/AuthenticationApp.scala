@@ -1,16 +1,76 @@
 package com.bootes.server.auth
 
-import com.bootes.client.ZSttpClient
-import com.bootes.config.Configuration.keycloakConfigValue
-import com.bootes.server.RequestOps
-import com.bootes.server.RequestOps
+import com.bootes.client.{FormUrlEncoded, ZSttpClient}
+import com.bootes.config.Configuration.{KeycloakConfig, keycloakConfigValue}
+import com.bootes.dao.keycloak.Models.ServiceContext
+import com.bootes.server.UserServer.{CorrelationId, DebugJsonLog}
+import com.bootes.server.{RequestOps, UserServer}
+import com.bootes.server.auth.ApiLoginRequest.{clientId, clientSecret, requestedPassword, requestedUsername}
 import com.bootes.server.auth.keycloak.KeycloakClientExample
 import pdi.jwt.{Jwt, JwtAlgorithm, JwtClaim, JwtOptions}
 import zhttp.http._
 import zio.clock.Clock
 import zio.json.{DeriveJsonCodec, JsonCodec}
-import zio.logging.Logging
+import zio.logging.{Logging, log}
 import zio.{IO, ZIO, system}
+
+case class Token(value: String) extends AnyVal
+object Token {
+  implicit val codec: JsonCodec[Token] = DeriveJsonCodec.gen[Token]
+}
+
+case class FailedLogin(user: String)
+
+case class LoginRequest(username: String, password: String, clientId: Option[String] = None)
+
+object LoginRequest {
+  implicit val codec: JsonCodec[LoginRequest] = DeriveJsonCodec.gen[LoginRequest]
+}
+
+case class AuthenticatedUser(username: String)
+
+case class ApiLoginRequest(scope: String, client_id: String, client_secret: String, grant_type: String, username: String, password: String)
+
+object ApiLoginRequest {
+  implicit val codec: JsonCodec[ApiLoginRequest] = DeriveJsonCodec.gen[ApiLoginRequest]
+  val clientSecret = System.getenv("CLIENT_SECRET")
+  val clientId = System.getenv("CLIENT_ID")
+  val requestedUsername = System.getenv("REQUESTED_USERNAME")
+  val requestedPassword = System.getenv("REQUESTED_PASSWORD")
+  val default = ApiLoginRequest(scope = "openid", client_id = clientId, client_secret = clientSecret, grant_type = "password", username = requestedUsername, password = requestedPassword)
+  def getLoginRequest(clientId: String): ApiLoginRequest = clientId.equalsIgnoreCase("admin-cli") match {
+    case true => default
+    case _ => default.copy(client_id = TokenValidationRequest.appClientId, client_secret = TokenValidationRequest.appClientSecret)
+  }
+}
+
+case class TokenValidationRequest(token_type_hint: String = "access_token", client_id: String, client_secret: String, token: String)
+object TokenValidationRequest {
+  implicit val codec: JsonCodec[TokenValidationRequest] = DeriveJsonCodec.gen[TokenValidationRequest]
+  val appClientSecret = System.getenv("APP_CLIENT_SECRET")
+  val appClientId = System.getenv("APP_CLIENT_ID")
+  def makeRequest(token: Token) = TokenValidationRequest(client_id = appClientId, client_secret = appClientSecret, token = token.value)
+}
+
+case class ApiToken (
+                      access_token: Option[String],
+                      expires_in: Option[Int],
+                      exp: Option[Int],
+                      jti: Option[String],
+                      refresh_expires_in: Option[Int],
+                      refresh_token: Option[String],
+                      token_type: Option[String],
+                      id_token: Option[String],
+                      session_state: Option[String],
+                      scope: Option[String],
+                      active: Option[Boolean],
+                      name: Option[String],
+                      email: Option[String],
+                      username: Option[String]
+                    )
+object ApiToken{
+  implicit val codec: JsonCodec[ApiToken] = DeriveJsonCodec.gen[ApiToken]
+}
 
 object AuthenticationApp extends RequestOps {
   // Secret Authentication key
@@ -38,18 +98,44 @@ object AuthenticationApp extends RequestOps {
     }
   }
 
-  def makeToken(token: String): String = token
-  def getToken(header: String): Option[Token] = {
-    println(s"Received header = $header")
+  def getMaybeToken(header: String): Option[String] = {
     if (header.startsWith("Bearer")) {
       for {
         token <- header.split(" ").lastOption
-      } yield {
-        Token(token)
-      }
+      } yield token
     } else {
       Option.empty
     }
+  }
+
+  def makeToken(token: String): String = token
+
+  def getToken(header: String)(implicit serviceContext: ServiceContext): Option[ApiToken] = {
+    val result:ZIO[Logging with Clock with system.System, Nothing, Option[ApiToken]] = (for {
+      _ <- log.locally(CorrelationId(serviceContext.requestId).andThen(DebugJsonLog(serviceContext.toString)))(
+        log.debug(s"Received token for checking validity")
+      )
+      //token: ZIO[Any, String, Token] <- {
+        token <- {
+        if (!header.isEmpty) {
+          ZIO.succeed(Token(header))
+        } else ZIO.fail(s"Bearer token, $header is invalid")
+      }
+      tt <- {
+        getApiToken(token)
+      }
+      r <- {
+        if (tt.active.getOrElse(false)) ZIO.succeed(Option(tt)) else ZIO.fail(s"Bearer token has expired for username, ${tt.username}")
+      }
+    } yield r).catchAll(ex => {
+      log.locally(CorrelationId(serviceContext.requestId).andThen(DebugJsonLog("")))(
+        log.debug(s"Error while checking validity of the token, ${ex}")
+      ) &>
+      ZIO.succeed(None.asInstanceOf[Option[ApiToken]])
+    })
+    val r = result.provideLayer(UserServer.logLayer ++ Clock.live ++ system.System.live)
+        val runtime = zio.Runtime.default
+        runtime.unsafeRun(r)
   }
 
   // Authentication middleware
@@ -57,11 +143,14 @@ object AuthenticationApp extends RequestOps {
   // For each request tries to read the `X-ACCESS-TOKEN` header
   // Validates JWT Claim
   //def authenticate[R, E](fail: HttpApp[R, E], success: JwtClaim => HttpApp[R, E]): HttpApp[R, E] = Http.flatten {
-  def authenticate[R, E](fail: HttpApp[R, E], success: Token => HttpApp[R, E]): HttpApp[R, E] = Http.flatten {
+  def authenticate[R, E](fail: HttpApp[R, E], success: ApiToken => HttpApp[R, E]): HttpApp[R, E] = Http.flatten {
       Http
         .fromFunction[Request] {
           _.getHeader("Authorization")
-            .flatMap(header => getToken(header.value.toString))
+            .flatMap(header => {
+              implicit val serviceContext = ServiceContext(token = getMaybeToken(header.value.toString.trim).getOrElse(""))
+              getToken(serviceContext.token)
+            })
             //.flatMap(header => jwtDecode(header.value.toString))
             .fold[HttpApp[R, E]](fail)(success)
         }
@@ -80,18 +169,20 @@ object AuthenticationApp extends RequestOps {
       Http.fail(HttpError.Unauthorized(s"Failed login for user: $user."))
     }
 
-  def validateLogin(request: LoginRequest): ZIO[Logging with Clock with system.System, FailedLogin, AuthenticatedUser] = {
-    val apiLoginRequest = ApiLoginRequest.default.copy(username = request.username, password = request.password)
-    /*
-    if (request.password == request.username.reverse) {
-      ZIO.succeed(AuthenticatedUser(request.username))
-    } else {
-      ZIO.fail(FailedLogin(request.username))
+  def getLoginUrl(configValue: KeycloakConfig, request: LoginRequest): String = {
+    request.clientId match {
+      case Some(id) if id.equalsIgnoreCase("admin-cli") =>
+        s"${configValue.keycloak.url}/realms/${configValue.keycloak.masterRealm}/protocol/openid-connect/token"
+      case _ =>
+        s"${configValue.keycloak.url}/realms/${configValue.keycloak.realm.getOrElse("")}/protocol/openid-connect/token"
     }
-     */
+  }
+
+  def validateLogin(request: LoginRequest): ZIO[Logging with Clock with system.System, FailedLogin, AuthenticatedUser] = {
+    val apiLoginRequest = ApiLoginRequest.getLoginRequest(request.clientId.getOrElse("")).copy(username = request.username, password = request.password)
     val r: ZIO[Logging with Clock with system.System, Object, AuthenticatedUser] = for {
       configValue <- keycloakConfigValue
-      url = s"${configValue.keycloak.url}/realms/${configValue.keycloak.masterRealm}/protocol/openid-connect/token"
+      url = getLoginUrl(configValue, request)
       maybeToken <- {
         ZSttpClient.login(url, Some(apiLoginRequest)).mapError(e => FailedLogin(s"${e.toString}"))
       }
@@ -99,7 +190,28 @@ object AuthenticationApp extends RequestOps {
         maybeToken match {
           case Right(tokenObject) =>
             val token = tokenObject.access_token
-            ZIO.succeed(AuthenticatedUser(token))
+            ZIO.succeed(AuthenticatedUser(token.getOrElse("")))
+          case Left(error) =>
+            ZIO.fail(FailedLogin(error))
+        }
+      }
+    } yield value
+    r.mapError(e => FailedLogin(s"${e.toString}"))
+  }
+
+  def getApiToken(token: Token): ZIO[Logging with Clock with system.System, FailedLogin, ApiToken] = {
+    implicit val serviceContext = ServiceContext(token = token.value)
+    val request = TokenValidationRequest.makeRequest(token)
+    val r: ZIO[Logging with Clock with system.System, Object, ApiToken] = for {
+      configValue <- keycloakConfigValue
+      url = s"${configValue.keycloak.url}/realms/${configValue.keycloak.realm.getOrElse("")}/protocol/openid-connect/token/introspect"
+      maybeToken <- {
+        ZSttpClient.post(url, request, classOf[ApiToken], FormUrlEncoded).mapError(e => FailedLogin(s"${e.toString}"))
+      }
+      value <- {
+        maybeToken match {
+          case Right(tokenObject) =>
+            ZIO.succeed(tokenObject)
           case Left(error) =>
             ZIO.fail(FailedLogin(error))
         }
@@ -109,42 +221,3 @@ object AuthenticationApp extends RequestOps {
   }
 }
 
-case class Token(value: String) extends AnyVal
-object Token {
-  implicit val codec: JsonCodec[Token] = DeriveJsonCodec.gen[Token]
-}
-
-case class FailedLogin(user: String)
-
-case class LoginRequest(username: String, password: String)
-
-object LoginRequest {
-  implicit val codec: JsonCodec[LoginRequest] = DeriveJsonCodec.gen[LoginRequest]
-}
-
-case class AuthenticatedUser(username: String)
-
-case class ApiLoginRequest(scope: String, client_id: String, client_secret: String, grant_type: String, username: String, password: String)
-
-object ApiLoginRequest {
-  implicit val codec: JsonCodec[ApiLoginRequest] = DeriveJsonCodec.gen[ApiLoginRequest]
-  val clientSecret = System.getenv("CLIENT_SECRET")
-  val clientId = System.getenv("CLIENT_ID")
-  val requestedUsername = System.getenv("REQUESTED_USERNAME")
-  val requestedPassword = System.getenv("REQUESTED_PASSWORD")
-  val default = ApiLoginRequest(scope = "openid", client_id = clientId, client_secret = clientSecret, grant_type = "password", username = requestedUsername, password = requestedPassword)
-}
-
-case class ApiToken (
-                           access_token: String,
-                           expires_in: Int,
-                           refresh_expires_in: Int,
-                           refresh_token: String,
-                           token_type: String,
-                           id_token: String,
-  session_state: String,
-  scope: String
-  )
-object ApiToken{
-  implicit val codec: JsonCodec[ApiToken] = DeriveJsonCodec.gen[ApiToken]
-}

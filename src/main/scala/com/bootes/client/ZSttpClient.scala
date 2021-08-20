@@ -1,6 +1,6 @@
 package com.bootes.client
 
-import com.bootes.client.ZSttpClient.{getRateLimiter}
+import com.bootes.client.ZSttpClient.getRateLimiter
 import com.bootes.config.Configuration.keycloakConfigValue
 import com.bootes.dao.User
 import com.bootes.dao.keycloak.Models.{ApiResponseError, ApiResponseSuccess, KeycloakUser, ServiceContext}
@@ -55,10 +55,10 @@ trait HttpClient {
             case true =>
               r.body match {
                 case Right(data) =>
-                  log.locally(CorrelationId(serviceContext.requestId).andThen(DebugJsonLog(data)))(
+                  val xs = data.fromJson[U]
+                  log.locally(CorrelationId(serviceContext.requestId).andThen(DebugJsonLog(if (xs.isLeft) xs.left.toOption.getOrElse("Error in getting error projection of the response") else "JSON prepared from the response")))(
                     log.debug(s"Received response for $url")
                   ) &> {
-                    val xs = data.fromJson[U]
                     ZIO.succeed(xs)
                   }
                 case Left(error) =>
@@ -114,7 +114,7 @@ trait HttpClient {
               r.body match {
                 case Right(data) =>
                   val xs = data.fromJson[List[U]]
-                  log.locally(CorrelationId(serviceContext.requestId).andThen(DebugJsonLog("")))(
+                  log.locally(CorrelationId(serviceContext.requestId).andThen(DebugJsonLog(if (xs.isLeft) xs.left.toOption.getOrElse("Error in getting error projection of the response") else "JSON prepared from the response")))(
                     log.debug(s"Received response for $url")
                   ) &> {
                     ZIO.succeed(xs)
@@ -179,10 +179,12 @@ trait HttpClient {
             res.flatMap(r => {
               r.body match {
                 case Right(data) =>
-                  log.locally(CorrelationId(serviceContext.requestId).andThen(DebugJsonLog(res.toString)))(
-                    log.debug(s"Received response $data for $url")
-                  ) &>
-                  ZIO.succeed(data.fromJson[U])
+                  val xs = data.fromJson[U]
+                  log.locally(CorrelationId(serviceContext.requestId).andThen(DebugJsonLog(if (xs.isLeft) xs.left.toOption.getOrElse("Error in getting error projection of the response") else "JSON prepared from the response")))(
+                      log.debug(s"Received response $data for $url")
+                  ) &> {
+                    ZIO.succeed(xs)
+                  }
                 case Left(error) =>
                   log.locally(CorrelationId(serviceContext.requestId).andThen(DebugJsonLog(res.toString)))(
                     log.debug(s"Received error $error for $url")

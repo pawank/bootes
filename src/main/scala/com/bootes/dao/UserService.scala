@@ -77,7 +77,7 @@ object LegalEntity {
 case class PiiInfo(firstName: String,
                    middleName: Option[String] = None,
                    lastName: String,
-                   email1: Option[Email] = None,
+                   email1: Option[String] = None,
                    email2: Option[String] = None,
                    email3: Option[String] = None,
                    phone1: Option[Phone] = None,

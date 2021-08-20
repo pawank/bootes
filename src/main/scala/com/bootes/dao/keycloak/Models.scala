@@ -52,10 +52,12 @@ object Models {
   case class Phone(value: String) extends AnyVal
   object Phone {
     implicit val codec: JsonCodec[Phone] = DeriveJsonCodec.gen[Phone]
+    implicit def asPhone(value: String) = Phone(value)
   }
   case class Email(value: String) extends AnyVal
   object Email {
     implicit val codec: JsonCodec[Email] = DeriveJsonCodec.gen[Email]
+    implicit def asEmail(value: String) = Email(value)
   }
 
 
@@ -71,9 +73,9 @@ object Models {
   }
 
   case class Attributes (
-                          phone: Option[Seq[Phone]] = None,
-                          phone2: Option[Seq[Phone]] = None,
-                          phone3: Option[Seq[Phone]] = None,
+                          phone: Option[Seq[String]] = None,
+                          phone2: Option[Seq[String]] = None,
+                          phone3: Option[Seq[String]] = None,
                           pancard: Option[Seq[String]] = None,
                           passport: Option[Seq[String]] = None
                         )
@@ -90,12 +92,13 @@ object Models {
                              emailVerified: Boolean = false,
                              firstName: String,
                              lastName: String,
-                             email: Option[Email] = None,
+                             email: Option[String] = None,
                              attributes: Option[Attributes] = None,
                              requiredActions: Seq[String] = Seq.empty,
                              notBefore: Int = 0,
                              access: Option[Access] = None
-                           )
+                           ) {
+  }
   object KeycloakUser {
     implicit val codec: JsonCodec[KeycloakUser] = DeriveJsonCodec.gen[KeycloakUser]
   }
@@ -113,7 +116,9 @@ object Models {
     implicit val codec: JsonCodec[ApiResponseSuccess] = DeriveJsonCodec.gen[ApiResponseSuccess]
   }
 
-  case class ServiceContext(token: String, requestId: Option[UUID] = Option(UUID.randomUUID()), readTimeout: FiniteDuration = 30.seconds, connectTimeout: FiniteDuration = 5.seconds)
+  case class ServiceContext(token: String, requestId: Option[UUID] = Option(UUID.randomUUID()), readTimeout: FiniteDuration = 30.seconds, connectTimeout: FiniteDuration = 5.seconds) {
+    override def toString: String = s"Token: ****** for requestId: $requestId"
+  }
   object ServiceContext {
     implicit val encoder: JsonEncoder[FiniteDuration] = JsonEncoder[Long].contramap(_._1)
     implicit val decoder: JsonDecoder[FiniteDuration] = JsonDecoder[Long].map(FiniteDuration(_, TimeUnit.SECONDS))

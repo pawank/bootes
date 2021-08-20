@@ -103,8 +103,8 @@ object KeycloakClientExample extends App {
               import sttp.client3._
               import sttp.client3.asynchttpclient.zio.AsyncHttpClientZioBackend
               AsyncHttpClientZioBackend.managed().use { backend =>
-                val payload = KeycloakUser(username = "pawan5", firstName = "pawan", lastName = "kumar", email = Some(Email("pawan5@test.com"))).toJson
-                val req = basicRequest.contentType("application/json").auth.bearer(token).body(payload).post(uri"$userCreateUrl")
+                val payload = KeycloakUser(username = "pawan5", firstName = "pawan", lastName = "kumar", email = Some("pawan5@test.com")).toJson
+                val req = basicRequest.contentType("application/json").auth.bearer(token.getOrElse("")).body(payload).post(uri"$userCreateUrl")
                 println(s"Sending sttp create user request = $req")
                 val res: Task[Response[Either[String, String]]] = req.send(backend)
                 println(s"Response based on sttp create user = $res")
@@ -139,7 +139,7 @@ object KeycloakClientExample extends App {
             import sttp.client3._
             import sttp.client3.asynchttpclient.zio.AsyncHttpClientZioBackend
             AsyncHttpClientZioBackend.managed().use { backend =>
-              val req = basicRequest.auth.bearer(token).get(uri"$usersUrl")
+              val req = basicRequest.auth.bearer(token.getOrElse("")).get(uri"$usersUrl")
               println(s"Sending sttp users request = $req")
               val res: Task[Response[Either[String, String]]] = req.send(backend)
               res.flatMap(r => {

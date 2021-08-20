@@ -72,7 +72,7 @@ object UserQueries {
   val usersQuery                   = quote(query[User])
   def byId(id: Long)               = quote(usersQuery.filter(_.id == lift(id)))
   def byCode(code: String)               = quote(usersQuery.filter(_.code == lift(code)))
-  def byEmail(email: String)               = quote(usersQuery.filter(_.pii.email1 == lift(Some(Email(email)):Option[Email])))
+  def byEmail(email: String)               = quote(usersQuery.filter(_.pii.email1 == lift(Some(email):Option[String])))
   def filter(values: Seq[FieldValue])               = quote(query[User])
   def insertUser(user: User) = quote(usersQuery.insert(lift(user)))
   def upsertUser(user: User) = quote(usersQuery.update(lift(user)))

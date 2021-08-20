@@ -5,6 +5,8 @@ version := "0.1"
 //scalaVersion := "3.0.1"
 scalaVersion := "2.13.6"
 
+organization := "bootes"
+
 val zioVersion        = "1.0.10"
 val zioPreludeVersion = "1.0.0-RC5"
 val zioLoggingVersion = "0.5.8"
@@ -39,7 +41,7 @@ libraryDependencies ++= Seq(
   "dev.zio"                       %% "zio-opentracing"          % zioOpenTracingVersion,
   "dev.zio"                       %% "zio-streams"              % zioVersion,
   "dev.zio"                       %% "zio-kafka"                % "0.16.0",
-  //"dev.zio"                       %% "zio-json-interop-refined" % zioVersion,
+  "dev.zio"                       % "zio-json-interop-refined_2.13" % "0.2.0-M1",
   "io.d11"                        %% "zhttp"                    % zioHttpVersion,
   "io.getquill"                   %% "quill-jdbc-zio"           % quillVersion,
   "org.flywaydb"                   % "flyway-core"              % flywayVersion,
@@ -70,3 +72,8 @@ libraryDependencies ++= Seq(
 )
 
 testFrameworks += new TestFramework("zio.test.sbt.ZTestFramework")
+
+lazy val app = (project in file("."))
+  .settings(
+    assembly / mainClass := Some("com.bootes.server.UserServer")
+)

@@ -156,6 +156,7 @@ trait HttpClient {
           import scala.concurrent.duration._
           val options = SttpBackendOptions.connectionTimeout(1.minute)
           AsyncHttpClientZioBackend.managed(options = options).use { backend =>
+
             val req = formType match {
               case FormUrlEncoded =>
                 val payload = com.bootes.utils.getCCParams(inputRequest)
@@ -175,7 +176,8 @@ trait HttpClient {
                 )
                 basicRequest.contentType("application/json").auth.bearer(serviceContext.token).body(payload).post(uri"$url")
             }
-            val res: Task[Response[Either[String, String]]] = req.send(backend)
+            //val res: Task[Response[Either[String, String]]] = req.send(sttp.client3.logging.slf4j.Slf4jLoggingBackend(delegate = backend, logRequestHeaders = false, sensitiveHeaders = Set("Authorization")))
+            val res: Task[Response[Either[String, String]]] = req.send(sttp.client3.logging.scribe.ScribeLoggingBackend(delegate = backend, logRequestHeaders = false, sensitiveHeaders = Set("Authorization")))
             res.flatMap(r => {
               r.body match {
                 case Right(data) =>

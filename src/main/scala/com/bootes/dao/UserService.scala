@@ -113,6 +113,7 @@ case class User(
   )
 
 case class CreateUserRequest (
+                 requestId: Option[String] = None,
                  `type`: String,
                  code: String,
                  pii: PiiInfo,

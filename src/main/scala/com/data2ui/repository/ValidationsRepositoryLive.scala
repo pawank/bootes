@@ -1,0 +1,72 @@
+package com.data2ui.repository
+
+import com.data2ui.models.Models.{Validations}
+import com.data2ui.repository.FormRepository
+import com.data2ui.repository.repository.NotFoundException
+import io.getquill.context.ZioJdbc.QuillZioExt
+import zio._
+import zio.blocking.Blocking
+
+import java.io.Closeable
+import javax.sql.DataSource
+
+case class ValidationsRepositoryLive(dataSource: DataSource with Closeable, blocking: Blocking.Service) extends ValidationsRepository {
+  val dataSourceLayer: Has[DataSource with Closeable] with Has[Blocking.Service] = Has.allOf[DataSource with Closeable, Blocking.Service](dataSource, blocking)
+
+  import com.data2ui.repository.repository.FormContext._
+
+  override def create(valid: Validations): Task[Validations] = transaction {
+    for {
+      id     <- run(ValidationsQueries.insertValidations(valid).returning(_.id))
+      valids <- {
+        run(ValidationsQueries.byId(id))
+      }
+    } yield valids.headOption.getOrElse(throw new Exception("Insert failed!"))
+  }.dependOnDataSource().provide(dataSourceLayer)
+
+  override def all: Task[Seq[Validations]] = run(ValidationsQueries.validsQuery).dependOnDataSource().provide(dataSourceLayer)
+
+  override def findById(id: Long): Task[Validations] = {
+    for {
+      results <- run(ValidationsQueries.byId(id)).dependOnDataSource().provide(dataSourceLayer)
+      valid    <- ZIO.fromOption(results.headOption).orElseFail(NotFoundException(s"Could not find valid with id $id", id.toString))
+    } yield valid
+  }
+
+  override def findByType(name: String): Task[Seq[Validations]] = {
+    for {
+      results <- run(ValidationsQueries.byType(name)).dependOnDataSource().provide(dataSourceLayer)
+      valid    <- ZIO.effect(results).orElseFail(NotFoundException(s"Could not find valids with input criteria, ${name.toString()}", name))
+    } yield valid
+  }
+
+  override def filter(values: Seq[FieldValue]): Task[Seq[Validations]] = {
+    for {
+      results <- run(ValidationsQueries.byType("")).dependOnDataSource().provide(dataSourceLayer)
+      valid    <- ZIO.effect(results).orElseFail(NotFoundException(s"Could not find valids with input criteria, ${values.toString()}", values.mkString(", ")))
+    } yield valid
+  }
+
+  override def update(valid: Validations): Task[Validations] = transaction {
+    for {
+      _     <- run(ValidationsQueries.upsertValidations(valid))
+      valids <- run(ValidationsQueries.byId(valid.id))
+    } yield valids.headOption.getOrElse(throw new Exception("Update failed!"))
+  }.dependOnDataSource().provide(dataSourceLayer)
+}
+
+object ValidationsQueries {
+
+  import com.data2ui.repository.repository.FormContext._
+
+  // NOTE - if you put the type here you get a 'dynamic query' - which will never wind up working...
+  implicit val validsSchemaMeta = schemaMeta[Validations](""""validations"""")
+  implicit val validsInsertMeta = insertMeta[Validations](_.id)
+
+  val validsQuery                   = quote(query[Validations])
+  def byId(id: Long)               = quote(validsQuery.filter(_.id == lift(id)))
+  def byType(value: String)               = quote(validsQuery.filter(_.`type` == lift(value)))
+  def filter(values: Seq[FieldValue])               = quote(query[Validations])
+  def insertValidations(valid: Validations) = quote(validsQuery.insert(lift(valid)))
+  def upsertValidations(valid: Validations) = quote(validsQuery.update(lift(valid)))
+}

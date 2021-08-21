@@ -1,12 +1,12 @@
 package com.bootes.dao
 
-import com.bootes.client.{FormUsingJson, ZSttpClient}
+import com.bootes.client.{FormUrlEncoded, FormUsingJson, NoContent, ZSttpClient}
 import com.bootes.config.Configuration.{KeycloakConfig, keycloakConfigDescription, keycloakConfigLayer, keycloakConfigValue}
 import com.bootes.dao.keycloak.Models.{ApiResponseError, ApiResponseSuccess, Attributes, Email, KeycloakUser, Phone, ServiceContext}
 import com.bootes.dao.repository.{JSONB, UserRepository}
 import com.bootes.server.UserServer
 import com.bootes.server.UserServer.{CorrelationId, DebugJsonLog}
-import com.bootes.server.auth.ApiToken
+import com.bootes.server.auth.{ApiToken, LogoutRequest}
 import com.bootes.server.auth.keycloak.KeycloakClientExample.{loginUrl, userCreateUrl, usersUrl}
 import io.getquill.Embedded
 import io.scalaland.chimney.dsl.TransformerOps
@@ -166,6 +166,7 @@ trait UserService {
   def get(id: Long)(implicit ctx: ServiceContext): Task[User]
   def get(code: String)(implicit ctx: ServiceContext): Task[User]
   def getByEmail(email: String)(implicit ctx: ServiceContext): Task[User]
+  def logout(id: String, inputRequest: LogoutRequest)(implicit ctx: ServiceContext): Task[ResponseMessage]
 }
 
 object UserService {
@@ -193,6 +194,8 @@ case class UserServiceLive(repository: UserRepository, console: Console.Service)
   override def get(code: String)(implicit ctx: ServiceContext): Task[User] = repository.findByCode(code)
 
   override def getByEmail(email: String)(implicit ctx: ServiceContext): Task[User] = repository.findByEmail(email)
+
+  def logout(id: String, inputRequest: LogoutRequest)(implicit ctx: ServiceContext): Task[ResponseMessage] = Task.succeed(ResponseMessage.makeSuccess(200, ""))
 }
 case class KeycloakUserServiceLive(console: Console.Service) extends UserService {
   import sttp.client3._
@@ -276,4 +279,42 @@ case class KeycloakUserServiceLive(console: Console.Service) extends UserService
 
   override def getByEmail(email: String)(implicit ctx: ServiceContext): Task[User] =
     ZIO.effect(User.sample)
+
+  override def logout(id: String, inputRequest: LogoutRequest)(implicit serviceContext: ServiceContext): Task[ResponseMessage] = {
+    val result = for {
+      configValue <- keycloakConfigValue
+      _ <- log.locally(CorrelationId(serviceContext.requestId).andThen(DebugJsonLog(configValue.toString)))(
+        log.debug(s"Loaded config")
+      )
+      url = s"${configValue.keycloak.url}/realms/${configValue.keycloak.realm.getOrElse("")}/protocol/openid-connect/logout"
+      res <- {
+        ZSttpClient.post(url, inputRequest, classOf[NoContent], FormUrlEncoded)
+      }
+      output <- {
+        res match {
+          case Right(data) =>
+            log.locally(CorrelationId(serviceContext.requestId).andThen(DebugJsonLog(data.toString)))(
+              log.debug(s"Got response for $url")
+            ) &>
+              ZIO.succeed(ResponseMessage(status = true, code = 200, message = "Logout done"))
+          case Left(data) =>
+            val error: String = data.fromJson[ApiResponseError].fold(s => s, c => c.errorMessage)
+            log.locally(CorrelationId(serviceContext.requestId).andThen(DebugJsonLog(data)))(
+              log.debug(s"Error for $url")
+            ) &>
+              ZIO.fail(error)
+        }
+      }
+    } yield output
+    result
+      .mapError(someError =>
+        someError match {
+          case Right(v) =>
+            new RuntimeException(s"Success: $v")
+          case Left(e) =>
+            new RuntimeException(s"Error: $e")
+        }
+      )
+      .provideLayer(Clock.live ++ UserServer.logLayer ++ system.System.live)
+  }
 }

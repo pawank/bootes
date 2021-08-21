@@ -2,7 +2,6 @@ package com.bootes.client
 
 import com.bootes.client.ZSttpClient.getRateLimiter
 import com.bootes.config.Configuration.keycloakConfigValue
-import com.bootes.dao.User
 import com.bootes.dao.keycloak.Models.{ApiResponseError, ApiResponseSuccess, KeycloakUser, ServiceContext}
 import com.bootes.server.UserServer.{CorrelationId, DebugJsonLog, logEnv}
 import com.bootes.server.auth.{ApiLoginRequest, ApiToken, LoginRequest}
@@ -26,6 +25,12 @@ import java.util.UUID
 sealed trait FormType
 case object FormUrlEncoded extends FormType
 case object FormUsingJson extends FormType
+
+case class NoContent(value: String)
+object NoContent {
+  implicit val codec: JsonCodec[NoContent] = DeriveJsonCodec.gen[NoContent]
+}
+
 
 trait HttpClient {
   def get[T <: (Product with Serializable), U <: (Product with Serializable)](url: String, inputRequest: T, successType: Class[U], formType: FormType = FormUsingJson)(implicit serviceContext: ServiceContext, encoder: JsonEncoder[T], decoder: JsonDecoder[U], printRecordsNo: Int = 1): ZIO[SttpClient with Logging, Serializable, Either[String, U]] = {
@@ -115,13 +120,13 @@ trait HttpClient {
                 case Right(data) =>
                   val xs = data.fromJson[List[U]]
                   log.locally(CorrelationId(serviceContext.requestId).andThen(DebugJsonLog(if (xs.isLeft) xs.left.toOption.getOrElse("Error in getting error projection of the response") else "JSON prepared from the collection response")))(
-                    log.debug(s"Received response for $url")
+                    log.debug(s"$statusCode Received response for $url")
                   ) &> {
                     ZIO.succeed(xs)
                   }
                 case Left(error) =>
                   log.locally(CorrelationId(serviceContext.requestId).andThen(DebugJsonLog(res.toString)))(
-                    log.debug(s"Received error $error for $url")
+                    log.debug(s"$statusCode Received error $error for $url")
                   ) &>
                     ZIO.fail(Left(error))
               }
@@ -129,12 +134,12 @@ trait HttpClient {
               r.body match {
                 case Right(data) =>
                   log.locally(CorrelationId(serviceContext.requestId).andThen(DebugJsonLog(res.toString)))(
-                    log.debug(s"Received response $data for $url")
+                    log.debug(s"$statusCode Received response $data for $url")
                   ) &>
                     ZIO.fail(data)
                 case Left(error) =>
                   log.locally(CorrelationId(serviceContext.requestId).andThen(DebugJsonLog(res.toString)))(
-                    log.debug(s"Received error $error for $url")
+                    log.debug(s"$statusCode Received error $error for $url")
                   ) &>
                     ZIO.fail(Left(error))
               }
@@ -179,18 +184,19 @@ trait HttpClient {
             //val res: Task[Response[Either[String, String]]] = req.send(sttp.client3.logging.slf4j.Slf4jLoggingBackend(delegate = backend, logRequestHeaders = false, sensitiveHeaders = Set("Authorization")))
             val res: Task[Response[Either[String, String]]] = req.send(sttp.client3.logging.scribe.ScribeLoggingBackend(delegate = backend, logRequestHeaders = false, sensitiveHeaders = Set("Authorization")))
             res.flatMap(r => {
+              val statusCode = r.code.code >= 200 && r.code.code < 300
               r.body match {
                 case Right(data) =>
-                  val xs = data.fromJson[U]
+                  val xs = if (r.code.code != 204) data.fromJson[U] else """{"value":"No Content"}""".fromJson[U]
                   log.locally(CorrelationId(serviceContext.requestId).andThen(DebugJsonLog(if (xs.isLeft) xs.left.toOption.getOrElse("Error in getting error projection of the response") else "JSON prepared from the response")))(
-                      log.debug(s"Received response and parsing successful for $url")
+                      log.debug(s"$statusCode Received response and parsing successful for $url")
                   ) &> {
                     //println(s"DATA = $xs")
                     ZIO.succeed(xs)
                   }
                 case Left(error) =>
                   log.locally(CorrelationId(serviceContext.requestId).andThen(DebugJsonLog(res.toString)))(
-                    log.debug(s"Received error $error for $url")
+                    log.debug(s"$statusCode Received error $error for $url")
                   ) &>
                   ZIO.fail(Left(error))
               }

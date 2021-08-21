@@ -10,7 +10,7 @@ import com.bootes.server.auth.keycloak.KeycloakClientExample
 import pdi.jwt.{Jwt, JwtAlgorithm, JwtClaim, JwtOptions}
 import zhttp.http._
 import zio.clock.Clock
-import zio.json.{DeriveJsonCodec, JsonCodec}
+import zio.json.{DeriveJsonCodec, EncoderOps, JsonCodec}
 import zio.logging.{Logging, log}
 import zio.{IO, ZIO, system}
 
@@ -24,7 +24,10 @@ object Token {
 case class FailedLogin(user: String)
 
 
-case class AuthenticatedUser(username: String)
+case class AuthenticatedUser(username: String, accessToken: String, refreshToken: String)
+object AuthenticatedUser {
+  implicit val codec: JsonCodec[AuthenticatedUser] = DeriveJsonCodec.gen[AuthenticatedUser]
+}
 
 case class ApiLoginRequest(scope: String, client_id: String, client_secret: String, grant_type: String, username: String, password: String) {
   val isAdminCli = client_id.equalsIgnoreCase("admin-cli")
@@ -51,6 +54,16 @@ object TokenValidationRequest {
   def makeRequest(token: Token) = TokenValidationRequest(client_id = appClientId, client_secret = appClientSecret, token = token.value)
   def makeAdminRequest(token: Token) = TokenValidationRequest(client_id = clientId, client_secret = clientSecret, token = token.value)
 }
+
+case class LogoutRequest(client_id: String, client_secret: String, refresh_token: String)
+object LogoutRequest {
+  implicit val codec: JsonCodec[LogoutRequest] = DeriveJsonCodec.gen[LogoutRequest]
+  val appClientSecret = System.getenv("APP_CLIENT_SECRET")
+  val appClientId = System.getenv("APP_CLIENT_ID")
+  def makeRequest(token: Token) = LogoutRequest(client_id = appClientId, client_secret = appClientSecret, refresh_token= token.value)
+  def makeAdminRequest(token: Token) = LogoutRequest(client_id = clientId, client_secret = clientSecret, refresh_token= token.value)
+}
+
 
 case class LoginRequest(username: String, password: String, clientId: Option[String] = None) {
   val isAdminCli = clientId.getOrElse("").equalsIgnoreCase("admin-cli")
@@ -182,15 +195,15 @@ object AuthenticationApp extends RequestOps {
   }
 
   def login: Http[Logging with Clock with system.System, HttpError.Unauthorized, Request, UResponse] = Http
-    .collectM[Request] { case req @ Method.POST -> Root / "bootes" / "v1" / "login" =>
+    .collectM[Request] { case req@Method.POST -> Root / "bootes" / "v1" / "login" =>
       for {
-        loginRequest      <- extractBodyFromJson[LoginRequest](req)
+        loginRequest <- extractBodyFromJson[LoginRequest](req)
         authenticatedUser <- {
           implicit val serviceContext = ServiceContext("", requestId = ServiceContext.newRequestId())
           validateLogin(loginRequest)
         }
-        jwtClaim          <- ZIO.effect(authenticatedUser.username)
-      } yield Response.text(jwtClaim)
+        jwtClaim <- ZIO.effect(authenticatedUser.copy(username = loginRequest.username))
+      } yield Response.jsonString(jwtClaim.toJson)
     }
     .catchAll { case FailedLogin(user) =>
       Http.fail(HttpError.Unauthorized(s"Failed login for user: $user."))
@@ -226,7 +239,7 @@ object AuthenticationApp extends RequestOps {
   }
 
   def validateLogin(request: LoginRequest)(implicit serviceContext: ServiceContext): ZIO[Logging with Clock with system.System, FailedLogin, AuthenticatedUser] = {
-    performLogin(request).map(u => AuthenticatedUser(u.access_token.getOrElse("")))
+    performLogin(request).map(u => AuthenticatedUser(u.username.getOrElse(""), u.access_token.getOrElse(""), u.refresh_token.getOrElse("")))
   }
 
   def getTokenValidityCheckUrl(configValue: KeycloakConfig, isAdmin: Boolean): String = {

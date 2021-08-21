@@ -5,7 +5,7 @@ import com.bootes.dao.repository.NotFoundException
 import com.bootes.dao.{CreateUserRequest, ResponseMessage, UserService}
 import com.bootes.dao.{CreateUserRequest, UserService}
 import com.bootes.server.UserServer.{CorrelationId, DebugJsonLog}
-import com.bootes.server.auth.{ApiToken, Token}
+import com.bootes.server.auth.{ApiToken, LogoutRequest, Token}
 import pdi.jwt.JwtClaim
 import zhttp.http._
 import zio.console._
@@ -42,6 +42,14 @@ object UserEndpoints extends RequestOps {
           for {
             request <- extractBodyFromJson[CreateUserRequest](req)
             results <- UserService.create(request)
+          } yield Response.jsonString(results.toJson)
+        case req@Method.POST -> Root / "bootes" / "v1" / "users" / "logout" =>
+          for {
+            request <- extractBodyFromJson[Token](req)
+            results <- {
+              val r = LogoutRequest.makeRequest(request)
+              UserService.logout("", r)
+            }
           } yield Response.jsonString(results.toJson)
       }
       .catchAll {

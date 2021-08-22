@@ -1,3 +1,21 @@
+create table form (
+                      id serial primary key,
+                      uid varchar(255) not null,
+                      title varchar(255) not null,
+                      sub_title varchar(255),
+                      width int,
+                      height int,
+                      background_color varchar(50),
+                      text_color varchar(50),
+                      font_family varchar(50),
+                      status varchar(255),
+                      created_at timestamp not null,
+                      updated_at timestamp,
+                      created_by varchar(255) not null,
+                      updated_by varchar(255)
+);
+create index idx_uid_form on form(uid);
+create index idx_title_form on form(title);
 
 create table form_elements (
                       id serial primary key,
@@ -18,7 +36,9 @@ create table form_elements (
                       created_at timestamp not null,
                       updated_at timestamp,
                       created_by varchar(255) not null,
-                      updated_by varchar(255)
+                      updated_by varchar(255),
+                      form_id integer not null,
+                      constraint fk_form_id foreign key(form_id) references form(id)
 );
 create index idx_name_form_elements on form_elements(name);
 create index idx_title_form_elements on form_elements(title);

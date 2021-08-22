@@ -18,7 +18,7 @@ trait FormRepository {
   def findByName(code: String): Task[Seq[Element]]
 }
 
-object ElementRepository {
+object FormRepository {
   val layer: URLayer[QDataSource, Has[FormRepository]] = (FormRepositoryLive(_, _)).toLayer
 }
 

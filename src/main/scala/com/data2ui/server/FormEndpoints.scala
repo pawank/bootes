@@ -22,40 +22,32 @@ object FormEndpoints extends RequestOps {
   import com.github.mvv.zilog.{Logging => ZLogging, Logger => ZLogger, log => zlog}
   implicit val logger: ZLogger = ZLogger[UserServer.type]
 
-  val user: ApiToken => Http[Has[FormService] with Console with Logging with ZLogging, HttpError, Request, UResponse] = jwtClaim => {
+  val form: ApiToken => Http[Has[FormService] with Console with Logging with ZLogging, HttpError, Request, UResponse] = jwtClaim => {
     scribe.debug(s"Claim found for ${jwtClaim.name}")
     implicit val serviceContext: ServiceContext = ServiceContext(token = jwtClaim.access_token.getOrElse(""), requestId = UUID.fromString(jwtClaim.requestId.getOrElse("")))
     Http
       .collectM[Request] {
-        case Method.GET -> Root / "bootes" / "v1" / "users" =>
+        case Method.GET -> Root / "bootes" / "v1" / "forms" =>
           for {
-            //_ <- ZIO.succeed(scribe.info("Getting list of all users"))
+            //_ <- ZIO.succeed(scribe.info("Getting list of all forms"))
             _ <- log.locally(CorrelationId(serviceContext.requestId).andThen(DebugJsonLog(serviceContext.toString)))(
-              log.debug("Calling user service for fetching all users matching with criteria")
+              log.debug("Calling user service for fetching all forms matching with criteria")
             )
-            users <- FormService.all
-          } yield Response.jsonString(users.toJson)
-        case Method.GET -> Root / "bootes" / "v1" / "users" / id =>
+            forms <- FormService.all
+          } yield Response.jsonString(forms.toJson)
+        case Method.GET -> Root / "bootes" / "v1" / "forms" / id =>
           for {
             user <- FormService.get(id.toInt)
           } yield Response.jsonString(user.toJson)
-        case req@Method.POST -> Root / "bootes" / "v1" / "users" =>
+        case req@Method.POST -> Root / "bootes" / "v1" / "forms" =>
           for {
             request <- extractBodyFromJson[CreateFormRequest](req)
             results <- FormService.create(request)(serviceContext.copy(requestId = request.requestId.map(UUID.fromString(_)).getOrElse(serviceContext.requestId)))
           } yield Response.jsonString(results.toJson)
-        case req@Method.POST -> Root / "bootes" / "v1" / "users" / "logout" =>
-          for {
-            request <- extractBodyFromJson[Token](req)
-            results <- {
-              val r = LogoutRequest.makeRequest(request)
-              FormService.logout("", r)
-            }
-          } yield Response.jsonString(results.toJson)
       }
       .catchAll {
         case NotFoundException(msg, id) =>
-          Http.fail(HttpError.NotFound(Root / "bootes" / "v1" / "users" / id.toString))
+          Http.fail(HttpError.NotFound(Root / "bootes" / "v1" / "forms" / id.toString))
         case ex: Throwable =>
           Http.fail(HttpError.InternalServerError(msg = ex.getMessage, cause = None))
         case err => Http.fail(HttpError.InternalServerError(msg = err.toString))

@@ -17,6 +17,12 @@ create table form (
 create index idx_uid_form on form(uid);
 create index idx_title_form on form(title);
 
+create table "section" (
+                      id serial primary key,
+                      form_id integer not null,
+                      constraint fk_section_form_id foreign key(form_id) references form(id)
+);
+
 create table form_elements (
                       id serial primary key,
                       name varchar(255) not null,
@@ -37,8 +43,8 @@ create table form_elements (
                       updated_at timestamp,
                       created_by varchar(255) not null,
                       updated_by varchar(255),
-                      form_id integer not null,
-                      constraint fk_form_id foreign key(form_id) references form(id)
+                      section_id integer not null,
+                      constraint fk_form_section_id foreign key(section_id) references "section"(id)
 );
 create index idx_name_form_elements on form_elements(name);
 create index idx_title_form_elements on form_elements(title);

@@ -3,6 +3,9 @@ package com.bootes.server
 import com.bootes.dao.UserService
 import com.bootes.dao.repository.{NotFoundException, UserRepository}
 import com.bootes.server.auth.AuthenticationApp
+import com.data2ui.FormService
+import com.data2ui.repository.{FormRepository, FormRepositoryLive}
+import com.data2ui.server.FormEndpoints
 import zhttp.http.{Response, _}
 import zhttp.service.Server
 import zio._
@@ -65,19 +68,27 @@ object UserServer extends App {
     }
   }
 
-  val endpoints: Http[Has[UserService] with Clock with Console with Logging with ZLogging with system.System, HttpError, Request, Response[Has[UserService] with Console with Logging with ZLogging, HttpError]] =
-    getVersion(root) +++ AuthenticationApp.login +++ CORS(
+  val userEndpoints: Http[Has[UserService] with Clock with Console with Logging with ZLogging with system.System, HttpError, Request, Response[Has[UserService]  with Console with Logging with ZLogging, HttpError]] =
+    CORS(
       AuthenticationApp.authenticate(HttpApp.forbidden("None shall pass."), UserEndpoints.user),
       config = CORSConfig(anyOrigin = true)
-    ) +++ InvoiceEndpoints.invoiceRoutes
+    )
+
+  val formEndpoints: Http[Has[FormService] with Clock with Console with Logging with ZLogging with system.System, HttpError, Request, Response[Has[FormService] with Console with Logging with ZLogging, HttpError]] =
+    getVersion(root) +++ AuthenticationApp.login +++ CORS(
+        AuthenticationApp.authenticate(HttpApp.forbidden("None shall pass."), FormEndpoints.form),
+      config = CORSConfig(anyOrigin = true)
+    )
 
   val program: ZIO[Any, Throwable, Nothing] = {
     import sttp.client3._
     import sttp.client3.asynchttpclient.zio._
     scribe.info("Starting bootes service..")
     Server
-      .start(8080, endpoints)
-      .inject(Console.live, logLayer, Clock.live, ZLogging.consoleJson(), AsyncHttpClientZioBackend.layer(), UserService.layerKeycloakService, system.System.live)
+      .start(8080, formEndpoints)
+      //.start(8080, userEndpoints +++ formEndpoints)
+      .inject(Console.live, logLayer, Clock.live, ZLogging.consoleJson(), AsyncHttpClientZioBackend.layer(), FormService.layer, system.System.live)
+      //.inject(Console.live, logLayer, Clock.live, ZLogging.consoleJson(), AsyncHttpClientZioBackend.layer(), UserService.layerKeycloakService, FormService.layer, system.System.live)
   }
 
   override def run(args: List[String]): URIO[zio.ZEnv, ExitCode] = program.exitCode

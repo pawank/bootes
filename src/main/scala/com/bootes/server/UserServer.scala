@@ -1,6 +1,6 @@
 package com.bootes.server
 
-import com.bootes.dao.UserService
+import com.bootes.dao.{UserService, ZioQuillContext}
 import com.bootes.dao.repository.{NotFoundException, UserRepository}
 import com.bootes.server.auth.AuthenticationApp
 import com.data2ui.FormService
@@ -85,10 +85,8 @@ object UserServer extends App {
     import sttp.client3.asynchttpclient.zio._
     scribe.info("Starting bootes service..")
     Server
-      .start(8080, formEndpoints)
-      //.start(8080, userEndpoints +++ formEndpoints)
-      .inject(Console.live, logLayer, Clock.live, ZLogging.consoleJson(), AsyncHttpClientZioBackend.layer(), FormService.layer, system.System.live)
-      //.inject(Console.live, logLayer, Clock.live, ZLogging.consoleJson(), AsyncHttpClientZioBackend.layer(), UserService.layerKeycloakService, FormService.layer, system.System.live)
+      .start(8080, userEndpoints +++ formEndpoints)
+      .inject(Console.live, ZioQuillContext.dataSourceLayer, logLayer, Clock.live, ZLogging.consoleJson(), AsyncHttpClientZioBackend.layer(), UserService.layerKeycloakService, FormRepository.layer, FormService.layer, system.System.live)
   }
 
   override def run(args: List[String]): URIO[zio.ZEnv, ExitCode] = program.exitCode

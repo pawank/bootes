@@ -22,6 +22,7 @@ object FormEndpoints extends RequestOps {
   import com.github.mvv.zilog.{Logging => ZLogging, Logger => ZLogger, log => zlog}
   implicit val logger: ZLogger = ZLogger[UserServer.type]
 
+
   val form: ApiToken => Http[Has[FormService] with Console with Logging with ZLogging, HttpError, Request, UResponse] = jwtClaim => {
     scribe.debug(s"Claim found for ${jwtClaim.name}")
     implicit val serviceContext: ServiceContext = ServiceContext(token = jwtClaim.access_token.getOrElse(""), requestId = UUID.fromString(jwtClaim.requestId.getOrElse("")))
@@ -31,7 +32,7 @@ object FormEndpoints extends RequestOps {
           for {
             //_ <- ZIO.succeed(scribe.info("Getting list of all forms"))
             _ <- log.locally(CorrelationId(serviceContext.requestId).andThen(DebugJsonLog(serviceContext.toString)))(
-              log.debug("Calling user service for fetching all forms matching with criteria")
+              log.debug("Calling form service for fetching all forms matching with criteria")
             )
             forms <- FormService.all
           } yield Response.jsonString(forms.toJson)
@@ -42,7 +43,10 @@ object FormEndpoints extends RequestOps {
         case req@Method.POST -> Root / "bootes" / "v1" / "forms" =>
           for {
             request <- extractBodyFromJson[CreateFormRequest](req)
-            results <- FormService.create(request)(serviceContext.copy(requestId = request.requestId.map(UUID.fromString(_)).getOrElse(serviceContext.requestId)))
+            results <- {
+              val orederedReq = request.copy(sections = request.sections.map(s => s.copy(elements = s.makeElementsOrdered())))
+              FormService.create(orederedReq)(serviceContext.copy(requestId = request.requestId.map(UUID.fromString(_)).getOrElse(serviceContext.requestId)))
+            }
           } yield Response.jsonString(results.toJson)
       }
       .catchAll {

@@ -71,6 +71,7 @@ object Models {
   case class Element(
                       id: Long,
                       tenantId: Long,
+                      seqNo: Int,
                       name: String = "message",
                       title: String,
                       description: Option[String],
@@ -82,6 +83,7 @@ object Models {
                       //options: Option[Seq[Options]] = None,
                       optionsType: Option[String] = None,
                       //validations: Seq[Validations],
+                      sectionName: Option[String],
                       config: Option[Config] = Option(Config(delayInSeconds = 1, showProgressBar = true, progressBarUri = None)),
                       action: Option[Boolean] = Option(false),
                       status: Option[String] = Option("active"),
@@ -103,6 +105,7 @@ object Models {
                                    //options: Option[Seq[Options]] = None,
                                    optionsType: Option[String] = None,
                                    //validations: Seq[Validations],
+                                   sectionName: Option[String],
                                    config: Option[Config] = Option(Config(delayInSeconds = 1, showProgressBar = true, progressBarUri = None)),
                                    action: Option[Boolean] = Option(false)
                                  )
@@ -229,7 +232,9 @@ object Models {
   }
 
 
-  case class FormSection(elements: Seq[Element])
+  case class FormSection(title: String, elements: Seq[Element]) {
+    def makeElementsOrdered(): Seq[Element] = elements.zipWithIndex.map(e => e._1.copy(sectionName = Option(title), seqNo = e._2))
+  }
   object FormSection{
     implicit val codec: JsonCodec[FormSection] = DeriveJsonCodec.gen[FormSection]
   }
@@ -241,7 +246,9 @@ object Models {
                                 sections: Seq[FormSection],
                                 designProperties: Option[DesignProperties],
                                 status: Option[String]
-                              )
+                              ) {
+      def getFormElements() = sections.map(_.elements).flatten
+  }
   object CreateFormRequest{
     implicit val codec: JsonCodec[CreateFormRequest] = DeriveJsonCodec.gen[CreateFormRequest]
 
@@ -262,6 +269,22 @@ object Models {
     implicit val codec: JsonCodec[Form] = DeriveJsonCodec.gen[Form]
   }
 
+  /*
+  case class UiForm (
+                   id: Long = -1,
+                   requestId: Option[String],
+                   uid: String,
+                   title: String,
+                   subTitle: Option[String],
+                   designProperties: Option[DesignProperties],
+                   elements: List[Element],
+                   status: Option[String],
+                   metadata: Option[Metadata] = None
+                 )
+  object UiForm {
+    implicit val codec: JsonCodec[UiForm] = DeriveJsonCodec.gen[UiForm]
+  }
+   */
   case class UiRequest(requestId: String, data: List[Element])
   object UiRequest {
     implicit val codec: JsonCodec[UiRequest] = DeriveJsonCodec.gen[UiRequest]

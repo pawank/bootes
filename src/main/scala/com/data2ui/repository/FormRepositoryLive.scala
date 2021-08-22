@@ -1,6 +1,6 @@
 package com.data2ui.repository
 
-import com.data2ui.models.Models.{Element, Options}
+import com.data2ui.models.Models.{CreateFormRequest, Element, Form, FormSection, Options}
 import com.data2ui.repository.FormRepository
 import com.data2ui.repository.repository.NotFoundException
 import io.getquill.context.ZioJdbc.QuillZioExt
@@ -15,59 +15,56 @@ case class FormRepositoryLive(dataSource: DataSource with Closeable, blocking: B
 
   import com.data2ui.repository.repository.FormContext._
 
-  override def create(element: Element): Task[Element] = transaction {
-    for {
-      id     <- run(ElementQueries.insertElement(element).returning(_.id))
-      elements <- {
-        run(ElementQueries.byId(id))
-      }
-    } yield elements.headOption.getOrElse(throw new Exception("Insert failed!"))
-  }.dependOnDataSource().provide(dataSourceLayer)
+  override def upsert(form: CreateFormRequest): Task[Form] = {
+    val dbForm = CreateFormRequest.toForm(form)
+    val elements: Seq[Element] = form.getFormElements()
+    transaction {
+      for {
+        id     <- run(FormQueries.insertForm(dbForm).returning(_.id))
+        elements <- {
+          run(FormQueries.byId(id))
+        }
+      } yield elements.headOption.getOrElse(throw new Exception("Insert failed!"))
+    }.dependOnDataSource().provide(dataSourceLayer)
+  }
 
-  override def all: Task[Seq[Element]] = run(ElementQueries.elementsQuery).dependOnDataSource().provide(dataSourceLayer)
+  override def all: Task[Seq[Form]] = run(FormQueries.elementsQuery).dependOnDataSource().provide(dataSourceLayer)
 
-  override def findById(id: Long): Task[Element] = {
+  override def findById(id: Long): Task[Form] = {
     for {
-      results <- run(ElementQueries.byId(id)).dependOnDataSource().provide(dataSourceLayer)
+      results <- run(FormQueries.byId(id)).dependOnDataSource().provide(dataSourceLayer)
       element    <- ZIO.fromOption(results.headOption).orElseFail(NotFoundException(s"Could not find element with id $id", id.toString))
     } yield element
   }
 
-  override def findByName(name: String): Task[Seq[Element]] = {
+  override def findByTitle(name: String): Task[Seq[Form]] = {
     for {
-      results <- run(ElementQueries.byName(name)).dependOnDataSource().provide(dataSourceLayer)
+      results <- run(FormQueries.byTitle(name)).dependOnDataSource().provide(dataSourceLayer)
       element    <- ZIO.effect(results).orElseFail(NotFoundException(s"Could not find elements with input criteria, ${name.toString()}", name))
     } yield element
   }
 
-  override def filter(values: Seq[FieldValue]): Task[Seq[Element]] = {
+  override def filter(values: Seq[FieldValue]): Task[Seq[Form]] = {
     for {
-      results <- run(ElementQueries.byName("")).dependOnDataSource().provide(dataSourceLayer)
+      results <- run(FormQueries.byTitle("")).dependOnDataSource().provide(dataSourceLayer)
       element    <- ZIO.effect(results).orElseFail(NotFoundException(s"Could not find elements with input criteria, ${values.toString()}", values.mkString(", ")))
     } yield element
   }
-
-  override def update(element: Element): Task[Element] = transaction {
-    for {
-      _     <- run(ElementQueries.upsertElement(element))
-      elements <- run(ElementQueries.byId(element.id))
-    } yield elements.headOption.getOrElse(throw new Exception("Update failed!"))
-  }.dependOnDataSource().provide(dataSourceLayer)
 }
 
 
-object ElementQueries {
+object FormQueries {
 
   import com.data2ui.repository.repository.FormContext._
 
   // NOTE - if you put the type here you get a 'dynamic query' - which will never wind up working...
-  implicit val elementSchemaMeta = schemaMeta[Element](""""form_element"""")
-  implicit val elementInsertMeta = insertMeta[Element](_.id)
+  implicit val elementSchemaMeta = schemaMeta[Form](""""form_element"""")
+  implicit val elementInsertMeta = insertMeta[Form](_.id)
 
-  val elementsQuery                   = quote(query[Element])
+  val elementsQuery                   = quote(query[Form])
   def byId(id: Long)               = quote(elementsQuery.filter(_.id == lift(id)))
-  def byName(name: String)               = quote(elementsQuery.filter(_.name == lift(name)))
-  def filter(values: Seq[FieldValue])               = quote(query[Element])
-  def insertElement(element: Element) = quote(elementsQuery.insert(lift(element)))
-  def upsertElement(element: Element) = quote(elementsQuery.update(lift(element)))
+  def byTitle(name: String)               = quote(elementsQuery.filter(_.title == lift(name)))
+  def filter(values: Seq[FieldValue])               = quote(query[Form])
+  def insertForm(element: Form) = quote(elementsQuery.insert(lift(element)))
+  def upsertForm(element: Form) = quote(elementsQuery.update(lift(element)))
 }

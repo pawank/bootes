@@ -4,7 +4,7 @@ import com.bootes.dao.{Metadata, ResponseMessage}
 import com.bootes.dao.keycloak.Models.{ApiResponseError, ApiResponseSuccess, Attributes, Email, KeycloakUser, Phone, ServiceContext}
 import com.bootes.dao.repository.{JSONB, UserRepository}
 import com.bootes.server.auth.{ApiToken, LogoutRequest}
-import com.data2ui.models.Models.{CreateFormRequest, Element}
+import com.data2ui.models.Models.{CreateFormRequest, Form}
 import com.data2ui.repository.FormRepository
 import io.getquill.Embedded
 import io.scalaland.chimney.dsl.TransformerOps
@@ -26,12 +26,12 @@ import scala.language.implicitConversions
 
 @accessible
 trait FormService {
-  def create(request: CreateFormRequest)(implicit ctx: ServiceContext): Task[Element]
-  def update(id: Long, request: CreateFormRequest)(implicit ctx: ServiceContext): Task[Element]
-  def all()(implicit ctx: ServiceContext): Task[Seq[Element]]
-  def get(id: Long)(implicit ctx: ServiceContext): Task[Element]
-  def get(code: String)(implicit ctx: ServiceContext): Task[Element]
-  def getByEmail(email: String)(implicit ctx: ServiceContext): Task[Element]
+  def create(request: CreateFormRequest)(implicit ctx: ServiceContext): Task[Form]
+  def update(id: Long, request: CreateFormRequest)(implicit ctx: ServiceContext): Task[Form]
+  def all()(implicit ctx: ServiceContext): Task[Seq[Form]]
+  def get(id: Long)(implicit ctx: ServiceContext): Task[Form]
+  def get(code: String)(implicit ctx: ServiceContext): Task[Form]
+  def getByEmail(email: String)(implicit ctx: ServiceContext): Task[Form]
   def logout(id: String, inputRequest: LogoutRequest)(implicit ctx: ServiceContext): Task[ResponseMessage]
 }
 
@@ -41,24 +41,24 @@ object FormService {
 
 case class FormServiceLive(repository: FormRepository, console: Console.Service) extends FormService {
 
-  override def create(request: CreateFormRequest)(implicit ctx: ServiceContext): Task[Element] = {
+  override def create(request: CreateFormRequest)(implicit ctx: ServiceContext): Task[Form] = {
     ???
   }
 
-  override def all()(implicit ctx: ServiceContext): Task[Seq[Element]] = for {
+  override def all()(implicit ctx: ServiceContext): Task[Seq[Form]] = for {
     elements <- repository.all
-    _     <- console.putStrLn(s"Elements: ${elements.map(_.name).mkString(",")}")
+    _     <- console.putStrLn(s"Forms: ${elements.map(_.title).mkString(",")}")
   } yield elements.sortBy(_.id)
 
-  override def get(id: Long)(implicit ctx: ServiceContext): Task[Element] = repository.findById(id)
+  override def get(id: Long)(implicit ctx: ServiceContext): Task[Form] = repository.findById(id)
 
-  override def update(id: Long, request: CreateFormRequest)(implicit ctx: ServiceContext): Task[Element] =  {
+  override def update(id: Long, request: CreateFormRequest)(implicit ctx: ServiceContext): Task[Form] =  {
     ???
   }
 
-  override def get(code: String)(implicit ctx: ServiceContext): Task[Element] = ???
+  override def get(code: String)(implicit ctx: ServiceContext): Task[Form] = ???
 
-  override def getByEmail(email: String)(implicit ctx: ServiceContext): Task[Element] = ???
+  override def getByEmail(email: String)(implicit ctx: ServiceContext): Task[Form] = ???
 
   def logout(id: String, inputRequest: LogoutRequest)(implicit ctx: ServiceContext): Task[ResponseMessage] = Task.succeed(ResponseMessage.makeSuccess(200, ""))
 }

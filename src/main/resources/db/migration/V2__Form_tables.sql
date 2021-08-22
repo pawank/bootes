@@ -23,8 +23,9 @@ create table "section" (
                       constraint fk_section_form_id foreign key(form_id) references form(id)
 );
 
-create table form_elements (
+create table form_element (
                       id serial primary key,
+                      seq_no integer not null,
                       name varchar(255) not null,
                       title varchar(255) not null,
                       description varchar(500),
@@ -43,18 +44,21 @@ create table form_elements (
                       updated_at timestamp,
                       created_by varchar(255) not null,
                       updated_by varchar(255),
-                      section_id integer not null,
-                      constraint fk_form_section_id foreign key(section_id) references "section"(id)
+                      section_id integer,
+                      form_id integer not null,
+                      section_name varchar(255) not null,
+                      constraint fk_form_section_id foreign key(section_id) references "section"(id),
+                      constraint fk_form_elements_form_id foreign key(form_id) references form(id)
 );
-create index idx_name_form_elements on form_elements(name);
-create index idx_title_form_elements on form_elements(title);
+create index idx_name_form_element on form_element(name);
+create index idx_title_form_element on form_element(title);
 
 create table options (
                       id serial primary key,
                       "value" varchar(255) not null,
                       text varchar(255) not null,
                       element_id integer not null,
-                      constraint fk_element_id foreign key(element_id) references form_elements(id)
+                      constraint fk_element_id foreign key(element_id) references form_element(id)
 );
 
 create table validations (
@@ -65,6 +69,6 @@ create table validations (
                       maximum int,
                       "values" varchar[],
                       element_id integer not null,
-                      constraint fk_form_element_id foreign key(element_id) references form_elements(id)
+                      constraint fk_form_element_id foreign key(element_id) references form_element(id)
 );
 create unique index idx_validations_title on validations (title);

@@ -1,7 +1,7 @@
 package com.data2ui.repository
 
 import com.data2ui.models.Models.{Element, Options}
-import com.data2ui.repository.ElementQueries.elementsQuery
+import com.data2ui.repository.ElementQueries.{elementsQuery, upsert}
 import com.data2ui.repository.FormElementsRepository
 import com.data2ui.repository.repository.NotFoundException
 import io.getquill.context.ZioJdbc.QuillZioExt
@@ -24,18 +24,6 @@ case class FormElementsRepositoryLive(dataSource: DataSource with Closeable, blo
       }
     } yield elements.headOption.getOrElse(throw new Exception("Insert failed!"))
   }.dependOnDataSource().provide(dataSourceLayer)
-
-  /*
-  def batchUpsert(elements: Seq[Element]): Task[Seq[Element]] = transaction {
-    for {
-      ids     <- run(liftQuery(elements).foreach(element => ElementQueries.insertElement(element).returning(eid => eid.id)))
-      //ids     <- run(liftQuery(elements).foreach(element => ElementQueries.insertElement(element).onConflictUpdate(_.id)((ext, tobeInserted) => ext -> tobeInserted).returning(eid => eid.id)))
-      elems <- run(ElementQueries.elementsQuery)
-      //elements <- run(ElementQueries.filterByIds(ids.map(id => id)))
-      xs    <- ZIO.effect(elems).orElseFail(NotFoundException(s"Could not find elements with input criteria", ""))
-    } yield xs
-  }.dependOnDataSource().provide(dataSourceLayer)
-  */
 
 
   override def create(element: Element): Task[Element] = transaction {
@@ -80,9 +68,18 @@ case class FormElementsRepositoryLive(dataSource: DataSource with Closeable, blo
   override def update(element: Element): Task[Element] = transaction {
     for {
       _     <- run(ElementQueries.upsertElement(element))
-      elements <- run(ElementQueries.byId(element.id))
-    } yield elements.headOption.getOrElse(throw new Exception("Update failed!"))
+      xs <- run(ElementQueries.byId(element.id))
+    } yield xs.headOption.getOrElse(throw new Exception("Update failed!"))
   }.dependOnDataSource().provide(dataSourceLayer)
+
+  def batchUpsert(elements: Seq[Element]): Task[Seq[Element]] = transaction {
+    for {
+      ids     <- run(ElementQueries.batchInsert(elements))
+      elems <- run(ElementQueries.filterByIds(ids.map(id => id)))
+      xs    <- ZIO.effect(elems).orElseFail(NotFoundException(s"Could not find elements with input criteria", ""))
+    } yield xs
+  }.dependOnDataSource().provide(dataSourceLayer)
+
 }
 
 
@@ -101,4 +98,8 @@ object ElementQueries {
   def filterByIds(ids: Seq[Long])               = quote(elementsQuery.filter(element => liftQuery(ids).contains(element.id)))
   def insertElement(element: Element) = quote(elementsQuery.insert(lift(element)))
   def upsertElement(element: Element) = quote(elementsQuery.update(lift(element)))
+  def upsert(element: Element) = quote(elementsQuery.insert(lift(element)).onConflictUpdate(_.id)((ext, tobeInserted) => ext -> tobeInserted).returning(_.id))
+  def batchInsert(elements: Seq[Element]) = quote{
+    liftQuery(elements).foreach(e => query[Element].insert(e).onConflictUpdate(_.id)((ext, tobeInserted) => ext -> tobeInserted).returning(_.id))
+  }
 }

@@ -9,7 +9,7 @@ import zio.macros.accessible
 @accessible
 trait FormElementsRepository {
   def upsert(element: Element): Task[Element]
-  //def batchUpsert(elements: Seq[Element]): Task[Seq[Element]]
+  def batchUpsert(elements: Seq[Element]): Task[Seq[Element]]
   def create(element: Element): Task[Element]
   def update(element: Element): Task[Element]
   def all: Task[Seq[Element]]

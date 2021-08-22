@@ -17,14 +17,14 @@ case class FormRepositoryLive(dataSource: DataSource with Closeable, blocking: B
 
   override def upsert(form: CreateFormRequest): Task[Form] = {
     val dbForm = CreateFormRequest.toForm(form)
-    val elements: Seq[Element] = form.getFormElements()
+    //val elements: Seq[Element] = form.getFormElements()
     transaction {
       for {
         id     <- run(FormQueries.insertForm(dbForm).returning(_.id))
-        elements <- {
+        xs <- {
           run(FormQueries.byId(id))
         }
-      } yield elements.headOption.getOrElse(throw new Exception("Insert failed!"))
+      } yield xs.headOption.getOrElse(throw new Exception("Insert failed!"))
     }.dependOnDataSource().provide(dataSourceLayer)
   }
 
@@ -40,15 +40,15 @@ case class FormRepositoryLive(dataSource: DataSource with Closeable, blocking: B
   override def findByTitle(name: String): Task[Seq[Form]] = {
     for {
       results <- run(FormQueries.byTitle(name)).dependOnDataSource().provide(dataSourceLayer)
-      element    <- ZIO.effect(results).orElseFail(NotFoundException(s"Could not find elements with input criteria, ${name.toString()}", name))
-    } yield element
+      xs <- ZIO.effect(results).orElseFail(NotFoundException(s"Could not find elements with input criteria, ${name.toString()}", name))
+    } yield xs
   }
 
   override def filter(values: Seq[FieldValue]): Task[Seq[Form]] = {
     for {
       results <- run(FormQueries.byTitle("")).dependOnDataSource().provide(dataSourceLayer)
-      element    <- ZIO.effect(results).orElseFail(NotFoundException(s"Could not find elements with input criteria, ${values.toString()}", values.mkString(", ")))
-    } yield element
+      xs <- ZIO.effect(results).orElseFail(NotFoundException(s"Could not find elements with input criteria, ${values.toString()}", values.mkString(", ")))
+    } yield xs
   }
 }
 

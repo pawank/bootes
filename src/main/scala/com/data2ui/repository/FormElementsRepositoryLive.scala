@@ -1,6 +1,7 @@
 package com.data2ui.repository
 
 import com.data2ui.models.Models.{Element, Options}
+import com.data2ui.repository.ElementQueries.elementsQuery
 import com.data2ui.repository.FormElementsRepository
 import com.data2ui.repository.repository.NotFoundException
 import io.getquill.context.ZioJdbc.QuillZioExt
@@ -25,14 +26,18 @@ case class FormElementsRepositoryLive(dataSource: DataSource with Closeable, blo
   }.dependOnDataSource().provide(dataSourceLayer)
 
   /*
-  override def batchUpsert(elements: Seq[Element]): Task[Seq[Element]] = transaction {
+  def batchUpsert(elements: Seq[Element]): Task[Seq[Element]] = transaction {
     for {
-      ids     <- run(liftQuery(elements).foreach(element => ElementQueries.insertElement(element).onConflictUpdate(_.id)((ext, tobeInserted) => ext -> tobeInserted).returning(_.id)))
-      elements <- run(ElementQueries.filterByIds(ids.map(id => id)))
-      xs    <- ZIO.effect(elements).orElseFail(NotFoundException(s"Could not find elements with input criteria", ""))
+      ids     <- run(liftQuery(elements).foreach(element => ElementQueries.insertElement(element).returning(eid => eid.id)))
+      //ids     <- run(liftQuery(elements).foreach(element => ElementQueries.insertElement(element).onConflictUpdate(_.id)((ext, tobeInserted) => ext -> tobeInserted).returning(eid => eid.id)))
+      elems <- run(ElementQueries.elementsQuery)
+      //elements <- run(ElementQueries.filterByIds(ids.map(id => id)))
+      xs    <- ZIO.effect(elems).orElseFail(NotFoundException(s"Could not find elements with input criteria", ""))
     } yield xs
   }.dependOnDataSource().provide(dataSourceLayer)
   */
+
+
   override def create(element: Element): Task[Element] = transaction {
     for {
       id     <- run(ElementQueries.insertElement(element).returning(_.id))
@@ -54,22 +59,22 @@ case class FormElementsRepositoryLive(dataSource: DataSource with Closeable, blo
   override def findByName(name: String): Task[Seq[Element]] = {
     for {
       results <- run(ElementQueries.byName(name)).dependOnDataSource().provide(dataSourceLayer)
-      element    <- ZIO.effect(results).orElseFail(NotFoundException(s"Could not find elements with input criteria, ${name.toString()}", name))
-    } yield element
+      xs <- ZIO.effect(results).orElseFail(NotFoundException(s"Could not find elements with input criteria, ${name.toString()}", name))
+    } yield xs
   }
 
   override def filter(values: Seq[FieldValue]): Task[Seq[Element]] = {
     for {
       results <- run(ElementQueries.byName("")).dependOnDataSource().provide(dataSourceLayer)
-      element    <- ZIO.effect(results).orElseFail(NotFoundException(s"Could not find elements with input criteria, ${values.toString()}", values.mkString(", ")))
-    } yield element
+      xs <- ZIO.effect(results).orElseFail(NotFoundException(s"Could not find elements with input criteria, ${values.toString()}", values.mkString(", ")))
+    } yield xs
   }
 
   override def filterByIds(ids: List[Long]): Task[Seq[Element]] = {
     for {
       results <- run(ElementQueries.filterByIds(ids)).dependOnDataSource().provide(dataSourceLayer)
-      element    <- ZIO.effect(results).orElseFail(NotFoundException(s"Could not find elements with input criteria, ${ids.toString()}", ids.mkString(", ")))
-    } yield element
+      xs <- ZIO.effect(results).orElseFail(NotFoundException(s"Could not find elements with input criteria, ${ids.toString()}", ids.mkString(", ")))
+    } yield xs
   }
 
   override def update(element: Element): Task[Element] = transaction {

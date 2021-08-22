@@ -87,7 +87,8 @@ object Models {
                       config: Option[Config] = Option(Config(delayInSeconds = 1, showProgressBar = true, progressBarUri = None)),
                       action: Option[Boolean] = Option(false),
                       status: Option[String] = Option("active"),
-                      metadata: Option[Metadata] = None
+                      metadata: Option[Metadata] = None,
+                      formId: Long
                     ) extends IElement
   object Element {
     implicit val codec: JsonCodec[Element] = DeriveJsonCodec.gen[Element]

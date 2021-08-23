@@ -35,9 +35,9 @@ case class FormRepositoryLive(dataSource: DataSource with Closeable, blocking: B
           val options: Map[Long, Seq[Options]] = requestedElements.groupBy(_.id).map(v => (v._1, v._2.map(_.options.getOrElse(Seq.empty)).flatten.map(x => x.copy(elementId = Some(v._1)))))
           run(OptionsQueries.batchUpsert(options.values.toSeq.flatten))
         }
-        //fetchedElements <- {
-        //  run(ElementQueries.getCreateElementRequestByFormId(id))
-        //}
+        fetchedElements <- {
+          run(ElementQueries.getCreateElementRequestByFormId(id))
+        }
         xs <- {
           run(FormQueries.byId(id))
         }
@@ -76,7 +76,7 @@ object FormQueries {
 
   // NOTE - if you put the type here you get a 'dynamic query' - which will never wind up working...
   implicit val elementSchemaMeta = schemaMeta[Form](""""form"""")
-  implicit val elementInsertMeta = insertMeta[Form](_.id)
+  //implicit val elementInsertMeta = insertMeta[Form](_.id)
 
   val elementsQuery                   = quote(query[Form])
   def byId(id: Long)               = quote(elementsQuery.filter(_.id == lift(id)))

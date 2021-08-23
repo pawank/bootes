@@ -90,7 +90,7 @@ object ElementQueries {
 
   // NOTE - if you put the type here you get a 'dynamic query' - which will never wind up working...
   implicit val elementSchemaMeta = schemaMeta[Element](""""form_element"""")
-  implicit val elementInsertMeta = insertMeta[Element](_.id)
+  //implicit val elementInsertMeta = insertMeta[Element](_.id)
 
   val elementsQuery                   = quote(query[Element])
   def byId(id: Long)               = quote(elementsQuery.filter(_.id == lift(id)))
@@ -106,7 +106,7 @@ object ElementQueries {
   def byFormId(formId: Long)               = quote(elementsQuery.filter(_.formId == lift(Option(formId))))
   def getCreateElementRequestByFormId(formId: Long)               =   quote {
     for {
-      ele <- query[Element].sortBy(p => p.seqNo)(Ord.asc).filter(x => x.formId == Option(formId))
+      ele <- query[Element].sortBy(p => p.seqNo)(Ord.asc).filter(x => x.formId == Option(lift(formId)))
       valid <- query[Validations].leftJoin(x => x.elementId == Option(ele.id))
       opt <- query[Options].leftJoin(x => x.elementId == Option(ele.id))
     } yield (ele, valid, opt)

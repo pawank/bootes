@@ -247,6 +247,7 @@ object Models {
     implicit val codec: JsonCodec[FormSection] = DeriveJsonCodec.gen[FormSection]
   }
   case class CreateFormRequest(
+                                id: Long,
                                 requestId: Option[String],
                                 uid: String,
                                 title: String,
@@ -260,7 +261,7 @@ object Models {
   object CreateFormRequest{
     implicit val codec: JsonCodec[CreateFormRequest] = DeriveJsonCodec.gen[CreateFormRequest]
 
-    implicit def toForm(record: CreateFormRequest): Form = record.into[Form].transform.copy(metadata = Some(Metadata.default))
+    implicit def toForm(record: CreateFormRequest): Form = record.into[Form].transform.copy(id = record.id, metadata = Some(Metadata.default))
   }
 
   case class Form(

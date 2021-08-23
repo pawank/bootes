@@ -35,6 +35,9 @@ case class FormRepositoryLive(dataSource: DataSource with Closeable, blocking: B
           val options: Map[Long, Seq[Options]] = requestedElements.groupBy(_.id).map(v => (v._1, v._2.map(_.options.getOrElse(Seq.empty)).flatten.map(x => x.copy(elementId = Some(v._1)))))
           run(OptionsQueries.batchUpsert(options.values.toSeq.flatten))
         }
+        //fetchedElements <- {
+        //  run(ElementQueries.getCreateElementRequestByFormId(id))
+        //}
         xs <- {
           run(FormQueries.byId(id))
         }

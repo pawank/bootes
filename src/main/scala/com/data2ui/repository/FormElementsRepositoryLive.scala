@@ -4,6 +4,7 @@ import com.data2ui.models.Models.{Element, Options, Validations}
 import com.data2ui.repository.ElementQueries.{elementsQuery, upsert}
 import com.data2ui.repository.FormElementsRepository
 import com.data2ui.repository.repository.NotFoundException
+import io.getquill.Ord
 import io.getquill.context.ZioJdbc.QuillZioExt
 import zio._
 import zio.blocking.Blocking
@@ -105,7 +106,7 @@ object ElementQueries {
   def byFormId(formId: Long)               = quote(elementsQuery.filter(_.formId == lift(Option(formId))))
   def getCreateElementRequestByFormId(formId: Long)               =   quote {
     for {
-      ele <- query[Element].filter(x => x.formId == Option(formId))
+      ele <- query[Element].sortBy(p => p.seqNo)(Ord.asc).filter(x => x.formId == Option(formId))
       valid <- query[Validations].leftJoin(x => x.elementId == Option(ele.id))
       opt <- query[Options].leftJoin(x => x.elementId == Option(ele.id))
     } yield (ele, valid, opt)

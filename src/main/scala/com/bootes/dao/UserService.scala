@@ -53,7 +53,7 @@ case class Metadata(createdAt: java.time.ZonedDateTime = ZonedDateTime.now(ZoneI
                     updatedBy: Option[String]) extends Embedded
 object Metadata {
   implicit val codec: JsonCodec[Metadata] = DeriveJsonCodec.gen[Metadata]
-  val default = Metadata(updatedAt = None, updatedBy = None)
+  val default = Metadata(createdAt = ZonedDateTime.now(ZoneId.of("UTC")), createdBy = "system", updatedAt = None, updatedBy = None)
 }
 
 case class VectorInfo(pancard: Option[String],

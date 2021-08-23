@@ -112,6 +112,7 @@ object Models {
                                    sectionName: Option[String],
                                    config: Option[Config] = Option(Config(delayInSeconds = 1, showProgressBar = true, progressBarUri = None)),
                                    action: Option[Boolean] = Option(false),
+                                   metadata: Option[Metadata] = Some(Metadata.default),
                                    formId: Option[Long]
                                  ) {
   }
@@ -254,7 +255,7 @@ object Models {
                                 designProperties: Option[DesignProperties],
                                 status: Option[String]
                               ) {
-      def getFormElements() = sections.map(_.elements).flatten
+    def getFormElements() = sections.map(_.elements).flatten
   }
   object CreateFormRequest{
     implicit val codec: JsonCodec[CreateFormRequest] = DeriveJsonCodec.gen[CreateFormRequest]

@@ -1,6 +1,7 @@
 package com.data2ui.repository
 
 import com.data2ui.models.Models.{CreateElementRequest, CreateFormRequest, Element, Form, FormSection, Options, Validations}
+import com.data2ui.repository.ElementQueries.elementsQuery
 import com.data2ui.repository.FormRepository
 import com.data2ui.repository.repository.NotFoundException
 import io.getquill.context.ZioJdbc.QuillZioExt
@@ -17,9 +18,10 @@ case class FormRepositoryLive(dataSource: DataSource with Closeable, blocking: B
 
   override def upsert(form: CreateFormRequest): Task[Form] = {
     val dbForm = CreateFormRequest.toForm(form)
+    println(s"Form to be inserted or updated = $dbForm")
     transaction {
       for {
-        id     <- run(FormQueries.insertForm(dbForm).returning(_.id))
+        id     <- run(FormQueries.upsert(dbForm))
         requestedElements = form.getFormElements()
         elements: Seq[Element] = requestedElements.map(CreateElementRequest.toElement(_)).map(e => e.copy(formId = Some(id)))
         savedElements <- {
@@ -79,4 +81,5 @@ object FormQueries {
   def filter(values: Seq[FieldValue])               = quote(query[Form])
   def insertForm(element: Form) = quote(elementsQuery.insert(lift(element)))
   def upsertForm(element: Form) = quote(elementsQuery.update(lift(element)))
+  def upsert(element: Form) = quote(elementsQuery.insert(lift(element)).onConflictUpdate(_.id)((ext, tobeInserted) => ext.id -> tobeInserted.id).returning(_.id))
 }

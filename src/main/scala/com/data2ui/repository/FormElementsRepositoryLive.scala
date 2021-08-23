@@ -1,6 +1,6 @@
 package com.data2ui.repository
 
-import com.data2ui.models.Models.{Element, Options}
+import com.data2ui.models.Models.{Element, Options, Validations}
 import com.data2ui.repository.ElementQueries.{elementsQuery, upsert}
 import com.data2ui.repository.FormElementsRepository
 import com.data2ui.repository.repository.NotFoundException
@@ -98,8 +98,16 @@ object ElementQueries {
   def filterByIds(ids: Seq[Long])               = quote(elementsQuery.filter(element => liftQuery(ids).contains(element.id)))
   def insertElement(element: Element) = quote(elementsQuery.insert(lift(element)))
   def upsertElement(element: Element) = quote(elementsQuery.update(lift(element)))
-  def upsert(element: Element) = quote(elementsQuery.insert(lift(element)).onConflictUpdate(_.id)((ext, tobeInserted) => ext -> tobeInserted).returning(_.id))
+  def upsert(element: Element) = quote(elementsQuery.insert(lift(element)).onConflictUpdate(_.id)((ext, tobeInserted) => ext.id -> tobeInserted.id).returning(_.id))
   def batchUpsert(elements: Seq[Element]) = quote{
-    liftQuery(elements).foreach(e => query[Element].insert(e).onConflictUpdate(_.id)((ext, tobeInserted) => ext -> tobeInserted).returning(_.id))
+    liftQuery(elements).foreach(e => query[Element].insert(e).onConflictUpdate(_.id)((ext, tobeInserted) => ext.id -> tobeInserted.id).returning(_.id))
+  }
+  def byFormId(formId: Long)               = quote(elementsQuery.filter(_.formId == lift(Option(formId))))
+  def getCreateElementRequestByFormId(formId: Long)               =   quote {
+    for {
+      ele <- query[Element].filter(x => x.formId == Option(formId))
+      valid <- query[Validations].leftJoin(x => x.elementId == Option(ele.id))
+      opt <- query[Options].leftJoin(x => x.elementId == Option(ele.id))
+    } yield (ele, valid, opt)
   }
 }

@@ -31,7 +31,7 @@ object Models {
                            minimum: Option[Int],
                            maximum: Option[Int],
                            values: Option[Seq[String]],
-                           elementId: Long
+                           elementId: Option[Long]
                          )
   object Validations {
     implicit val codec: JsonCodec[Validations] = DeriveJsonCodec.gen[Validations]
@@ -41,7 +41,7 @@ object Models {
                        id: Long,
                        value: String,
                        text: String,
-                       elementId: Long
+                       elementId: Option[Long]
                      )
   object Options {
     implicit val codec: JsonCodec[Options] = DeriveJsonCodec.gen[Options]
@@ -88,7 +88,7 @@ object Models {
                       action: Option[Boolean] = Option(false),
                       status: Option[String] = Option("active"),
                       metadata: Option[Metadata] = None,
-                      formId: Long
+                      formId: Option[Long]
                     ) extends IElement
   object Element {
     implicit val codec: JsonCodec[Element] = DeriveJsonCodec.gen[Element]
@@ -112,7 +112,7 @@ object Models {
                                    sectionName: Option[String],
                                    config: Option[Config] = Option(Config(delayInSeconds = 1, showProgressBar = true, progressBarUri = None)),
                                    action: Option[Boolean] = Option(false),
-                                   formId: Long
+                                   formId: Option[Long]
                                  ) {
   }
   object CreateElementRequest{

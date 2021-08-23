@@ -21,16 +21,16 @@ case class FormRepositoryLive(dataSource: DataSource with Closeable, blocking: B
       for {
         id     <- run(FormQueries.insertForm(dbForm).returning(_.id))
         requestedElements = form.getFormElements()
-        elements: Seq[Element] = requestedElements.map(CreateElementRequest.toElement(_)).map(e => e.copy(formId = id))
+        elements: Seq[Element] = requestedElements.map(CreateElementRequest.toElement(_)).map(e => e.copy(formId = Some(id)))
         savedElements <- {
           run(ElementQueries.batchUpsert(elements))
         }
         savedValids <- {
-          val xs: Map[Long, Seq[Validations]] = requestedElements.groupBy(_.id).map(v => (v._1, v._2.map(_.validations).flatten.map(x => x.copy(elementId = v._1))))
+          val xs: Map[Long, Seq[Validations]] = requestedElements.groupBy(_.id).map(v => (v._1, v._2.map(_.validations).flatten.map(x => x.copy(elementId = Some(v._1)))))
           run(ValidationsQueries.batchUpsert(xs.values.toSeq.flatten))
         }
         savedOpts <- {
-          val options: Map[Long, Seq[Options]] = requestedElements.groupBy(_.id).map(v => (v._1, v._2.map(_.options.getOrElse(Seq.empty)).flatten.map(x => x.copy(elementId = v._1))))
+          val options: Map[Long, Seq[Options]] = requestedElements.groupBy(_.id).map(v => (v._1, v._2.map(_.options.getOrElse(Seq.empty)).flatten.map(x => x.copy(elementId = Some(v._1)))))
           run(OptionsQueries.batchUpsert(options.values.toSeq.flatten))
         }
         xs <- {

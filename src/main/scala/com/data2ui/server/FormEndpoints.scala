@@ -45,7 +45,7 @@ object FormEndpoints extends RequestOps {
             request <- extractBodyFromJson[CreateFormRequest](req)
             results <- {
               val orederedReq = request.copy(sections = request.sections.map(s => s.copy(elements = s.makeElementsOrdered())))
-              FormService.create(orederedReq)(serviceContext.copy(requestId = request.requestId.map(UUID.fromString(_)).getOrElse(serviceContext.requestId)))
+              FormService.upsert(orederedReq)(serviceContext.copy(requestId = request.requestId.map(UUID.fromString(_)).getOrElse(serviceContext.requestId)))
             }
           } yield Response.jsonString(results.toJson)
       }

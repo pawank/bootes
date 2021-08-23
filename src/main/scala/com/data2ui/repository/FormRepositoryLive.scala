@@ -70,7 +70,7 @@ object FormQueries {
   import com.data2ui.repository.repository.FormContext._
 
   // NOTE - if you put the type here you get a 'dynamic query' - which will never wind up working...
-  implicit val elementSchemaMeta = schemaMeta[Form](""""form_element"""")
+  implicit val elementSchemaMeta = schemaMeta[Form](""""form"""")
   implicit val elementInsertMeta = insertMeta[Form](_.id)
 
   val elementsQuery                   = quote(query[Form])

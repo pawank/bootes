@@ -75,7 +75,7 @@ object UserServer extends App {
     )
 
   val formEndpoints: Http[Has[FormService] with Clock with Console with Logging with ZLogging with system.System, HttpError, Request, Response[Has[FormService] with Console with Logging with ZLogging, HttpError]] =
-    getVersion(root) +++ AuthenticationApp.login +++ CORS(
+    CORS(
         AuthenticationApp.authenticate(HttpApp.forbidden("None shall pass."), FormEndpoints.form),
       config = CORSConfig(anyOrigin = true)
     )
@@ -85,7 +85,7 @@ object UserServer extends App {
     import sttp.client3.asynchttpclient.zio._
     scribe.info("Starting bootes service..")
     Server
-      .start(8080, userEndpoints +++ formEndpoints)
+      .start(8080, getVersion(root) +++ AuthenticationApp.login +++ userEndpoints +++ formEndpoints)
       .inject(Console.live, ZioQuillContext.dataSourceLayer, OptionsRepository.layer, ValidationsRepository.layer, FormElementsRepository.layer, logLayer, Clock.live, ZLogging.consoleJson(), AsyncHttpClientZioBackend.layer(), UserService.layerKeycloakService, FormRepository.layer, FormService.layer, system.System.live)
   }
 

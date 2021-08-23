@@ -228,8 +228,8 @@ object Models {
 */
 
   case class DesignProperties (
-                                width: Option[String],
-                                height: Option[String],
+                                width: Option[Int],
+                                height: Option[Int],
                                 backgroundColor: Option[String],
                                 textColor: Option[String],
                                 fontFamily: Option[String]
@@ -264,12 +264,12 @@ object Models {
 
   case class Form(
                    id: Long = -1,
-                   requestId: Option[String],
+                   requestId: Option[String] = None,
                    uid: String,
                    title: String,
                    subTitle: Option[String],
-                   designProperties: Option[DesignProperties],
-                   status: Option[String],
+                   designProperties: Option[DesignProperties] = None,
+                   status: Option[String] = None,
                    metadata: Option[Metadata] = None
                  )
   object Form {

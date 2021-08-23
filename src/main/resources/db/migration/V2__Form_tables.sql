@@ -1,5 +1,6 @@
 create table form (
                       id serial primary key,
+                      request_id varchar(255),
                       uid varchar(255) not null,
                       title varchar(255) not null,
                       sub_title varchar(255),
@@ -25,6 +26,7 @@ create table "section" (
 
 create table form_element (
                       id serial primary key,
+                      tenant_id int not null,
                       seq_no integer not null,
                       name varchar(255) not null,
                       title varchar(255) not null,
@@ -32,9 +34,9 @@ create table form_element (
                       "values" varchar[] not null,
                       type varchar(255) not null,
                       required boolean not null default true,
-                      custom_error varchar(255),
+                      customer_error varchar(255),
                       errors varchar[],
-                      option_type varchar(255),
+                      options_type varchar(255),
                       delay_in_seconds int,
                       show_progress_bar boolean default false,
                       progress_bar_uri varchar(500),

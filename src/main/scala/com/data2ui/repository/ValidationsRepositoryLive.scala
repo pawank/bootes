@@ -1,7 +1,8 @@
 package com.data2ui.repository
 
-import com.data2ui.models.Models.{Validations}
+import com.data2ui.models.Models.{Options, Validations}
 import com.data2ui.repository.FormRepository
+import com.data2ui.repository.OptionsQueries.optionsQuery
 import com.data2ui.repository.repository.NotFoundException
 import io.getquill.context.ZioJdbc.QuillZioExt
 import zio._
@@ -14,6 +15,15 @@ case class ValidationsRepositoryLive(dataSource: DataSource with Closeable, bloc
   val dataSourceLayer: Has[DataSource with Closeable] with Has[Blocking.Service] = Has.allOf[DataSource with Closeable, Blocking.Service](dataSource, blocking)
 
   import com.data2ui.repository.repository.FormContext._
+
+  override def upsert(element: Validations): Task[Validations] = transaction {
+    for {
+      id     <- run(ValidationsQueries.insertValidations(element).onConflictUpdate(_.id)((ext, tobeInserted) => ext -> tobeInserted).returning(_.id))
+      elements <- {
+        run(ValidationsQueries.byId(id))
+      }
+    } yield elements.headOption.getOrElse(throw new Exception("Insert failed!"))
+  }.dependOnDataSource().provide(dataSourceLayer)
 
   override def create(valid: Validations): Task[Validations] = transaction {
     for {
@@ -53,6 +63,14 @@ case class ValidationsRepositoryLive(dataSource: DataSource with Closeable, bloc
       valids <- run(ValidationsQueries.byId(valid.id))
     } yield valids.headOption.getOrElse(throw new Exception("Update failed!"))
   }.dependOnDataSource().provide(dataSourceLayer)
+
+  def batchUpsert(elements: Seq[Validations]): Task[Seq[Validations]] = transaction {
+    for {
+      ids     <- run(ValidationsQueries.batchUpsert(elements))
+      elems <- run(ValidationsQueries.filterByIds(ids))
+      xs    <- ZIO.effect(elems).orElseFail(NotFoundException(s"Could not find elements with input criteria", ""))
+    } yield xs
+  }.dependOnDataSource().provide(dataSourceLayer)
 }
 
 object ValidationsQueries {
@@ -65,8 +83,12 @@ object ValidationsQueries {
 
   val validsQuery                   = quote(query[Validations])
   def byId(id: Long)               = quote(validsQuery.filter(_.id == lift(id)))
+  def filterByIds(ids: Seq[Long])               = quote(validsQuery.filter(element => liftQuery(ids).contains(element.id)))
   def byType(value: String)               = quote(validsQuery.filter(_.`type` == lift(value)))
   def filter(values: Seq[FieldValue])               = quote(query[Validations])
   def insertValidations(valid: Validations) = quote(validsQuery.insert(lift(valid)))
   def upsertValidations(valid: Validations) = quote(validsQuery.update(lift(valid)))
+  def batchUpsert(elements: Seq[Validations]) = quote{
+    liftQuery(elements).foreach(e => query[Validations].insert(e).onConflictUpdate(_.id)((ext, tobeInserted) => ext -> tobeInserted).returning(_.id))
+  }
 }

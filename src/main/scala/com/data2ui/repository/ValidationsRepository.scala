@@ -9,6 +9,8 @@ import zio.macros.accessible
 trait ValidationsRepository {
   def create(option: Validations): Task[Validations]
   def update(option: Validations): Task[Validations]
+  def upsert(option: Validations): Task[Validations]
+  def batchUpsert(options: Seq[Validations]): Task[Seq[Validations]]
   def all: Task[Seq[Validations]]
   def filter(values: Seq[FieldValue]): Task[Seq[Validations]]
   def findById(id: Long): Task[Validations]

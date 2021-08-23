@@ -9,6 +9,8 @@ import zio.macros.accessible
 trait OptionsRepository {
   def create(option: Options): Task[Options]
   def update(option: Options): Task[Options]
+  def upsert(option: Options): Task[Options]
+  def batchUpsert(options: Seq[Options]): Task[Seq[Options]]
   def all: Task[Seq[Options]]
   def filter(values: Seq[FieldValue]): Task[Seq[Options]]
   def findById(id: Long): Task[Options]

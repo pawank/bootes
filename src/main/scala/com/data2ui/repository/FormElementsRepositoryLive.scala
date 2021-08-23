@@ -74,8 +74,8 @@ case class FormElementsRepositoryLive(dataSource: DataSource with Closeable, blo
 
   def batchUpsert(elements: Seq[Element]): Task[Seq[Element]] = transaction {
     for {
-      ids     <- run(ElementQueries.batchInsert(elements))
-      elems <- run(ElementQueries.filterByIds(ids.map(id => id)))
+      ids     <- run(ElementQueries.batchUpsert(elements))
+      elems <- run(ElementQueries.filterByIds(ids))
       xs    <- ZIO.effect(elems).orElseFail(NotFoundException(s"Could not find elements with input criteria", ""))
     } yield xs
   }.dependOnDataSource().provide(dataSourceLayer)
@@ -99,7 +99,7 @@ object ElementQueries {
   def insertElement(element: Element) = quote(elementsQuery.insert(lift(element)))
   def upsertElement(element: Element) = quote(elementsQuery.update(lift(element)))
   def upsert(element: Element) = quote(elementsQuery.insert(lift(element)).onConflictUpdate(_.id)((ext, tobeInserted) => ext -> tobeInserted).returning(_.id))
-  def batchInsert(elements: Seq[Element]) = quote{
+  def batchUpsert(elements: Seq[Element]) = quote{
     liftQuery(elements).foreach(e => query[Element].insert(e).onConflictUpdate(_.id)((ext, tobeInserted) => ext -> tobeInserted).returning(_.id))
   }
 }

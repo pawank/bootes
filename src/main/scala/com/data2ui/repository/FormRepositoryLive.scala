@@ -1,6 +1,6 @@
 package com.data2ui.repository
 
-import com.data2ui.models.Models.{CreateFormRequest, Element, Form, FormSection, Options}
+import com.data2ui.models.Models.{CreateElementRequest, CreateFormRequest, Element, Form, FormSection, Options, Validations}
 import com.data2ui.repository.FormRepository
 import com.data2ui.repository.repository.NotFoundException
 import io.getquill.context.ZioJdbc.QuillZioExt
@@ -17,14 +17,26 @@ case class FormRepositoryLive(dataSource: DataSource with Closeable, blocking: B
 
   override def upsert(form: CreateFormRequest): Task[Form] = {
     val dbForm = CreateFormRequest.toForm(form)
-    //val elements: Seq[Element] = form.getFormElements()
     transaction {
       for {
         id     <- run(FormQueries.insertForm(dbForm).returning(_.id))
+        requestedElements = form.getFormElements()
+        elements: Seq[Element] = requestedElements.map(CreateElementRequest.toElement(_)).map(e => e.copy(formId = id))
+        savedElements <- {
+          run(ElementQueries.batchUpsert(elements))
+        }
+        savedValids <- {
+          val xs: Map[Long, Seq[Validations]] = requestedElements.groupBy(_.id).map(v => (v._1, v._2.map(_.validations).flatten.map(x => x.copy(elementId = v._1))))
+          run(ValidationsQueries.batchUpsert(xs.values.toSeq.flatten))
+        }
+        savedOpts <- {
+          val options: Map[Long, Seq[Options]] = requestedElements.groupBy(_.id).map(v => (v._1, v._2.map(_.options.getOrElse(Seq.empty)).flatten.map(x => x.copy(elementId = v._1))))
+          run(OptionsQueries.batchUpsert(options.values.toSeq.flatten))
+        }
         xs <- {
           run(FormQueries.byId(id))
         }
-      } yield xs.headOption.getOrElse(throw new Exception("Insert failed!"))
+      } yield xs.headOption.getOrElse(throw new Exception("Insert or update failed!"))
     }.dependOnDataSource().provide(dataSourceLayer)
   }
 

@@ -95,6 +95,9 @@ object Models {
   }
 
   case class CreateElementRequest(
+                                   id: Long,
+                                   tenantId: Long,
+                                   seqNo: Int,
                                    name: String = "message",
                                    title: String,
                                    description: Option[String],
@@ -103,15 +106,18 @@ object Models {
                                    required: Option[Boolean] = Option(true),
                                    customerError: Option[String] = None,
                                    errors: Option[Seq[String]] = None,
-                                   //options: Option[Seq[Options]] = None,
+                                   options: Option[Seq[Options]] = None,
                                    optionsType: Option[String] = None,
-                                   //validations: Seq[Validations],
+                                   validations: Seq[Validations],
                                    sectionName: Option[String],
                                    config: Option[Config] = Option(Config(delayInSeconds = 1, showProgressBar = true, progressBarUri = None)),
-                                   action: Option[Boolean] = Option(false)
-                                 )
+                                   action: Option[Boolean] = Option(false),
+                                   formId: Long
+                                 ) {
+  }
   object CreateElementRequest{
     implicit val codec: JsonCodec[CreateElementRequest] = DeriveJsonCodec.gen[CreateElementRequest]
+    def toElement(element: CreateElementRequest) = element.into[Element].transform.copy(id = element.id, tenantId = element.tenantId, seqNo = element.seqNo)
   }
 
   /*
@@ -233,8 +239,8 @@ object Models {
   }
 
 
-  case class FormSection(title: String, elements: Seq[Element]) {
-    def makeElementsOrdered(): Seq[Element] = elements.zipWithIndex.map(e => e._1.copy(sectionName = Option(title), seqNo = e._2))
+  case class FormSection(title: String, elements: Seq[CreateElementRequest]) {
+    def makeElementsOrdered(): Seq[CreateElementRequest] = elements.zipWithIndex.map(e => e._1.copy(sectionName = Option(title), seqNo = e._2))
   }
   object FormSection{
     implicit val codec: JsonCodec[FormSection] = DeriveJsonCodec.gen[FormSection]

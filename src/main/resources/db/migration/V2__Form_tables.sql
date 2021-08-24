@@ -1,7 +1,7 @@
 create table form (
                       id serial primary key,
+                      tenant_id int not null,
                       request_id varchar(255),
-                      uid varchar(255) not null,
                       title varchar(255) not null,
                       sub_title varchar(255),
                       width int,
@@ -15,8 +15,7 @@ create table form (
                       created_by varchar(255) not null,
                       updated_by varchar(255)
 );
-create index idx_uid_form on form(uid);
-create index idx_title_form on form(title);
+create unique index idx_tenant_title_form on form(tenant_id, title);
 
 create table "section" (
                       id serial primary key,
@@ -26,7 +25,6 @@ create table "section" (
 
 create table form_element (
                       id serial primary key,
-                      tenant_id int not null,
                       seq_no integer not null,
                       name varchar(255) not null,
                       title varchar(255) not null,
@@ -74,4 +72,4 @@ create table validations (
                       element_id integer not null,
                       constraint fk_form_element_id foreign key(element_id) references form_element(id)
 );
-create unique index idx_validations_title on validations (title);
+create index idx_validations_title on validations (title);

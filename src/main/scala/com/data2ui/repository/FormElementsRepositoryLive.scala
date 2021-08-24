@@ -101,7 +101,7 @@ object ElementQueries {
   def upsertElement(element: Element) = quote(elementsQuery.update(lift(element)))
   def upsert(element: Element) = quote(elementsQuery.insert(lift(element)).onConflictUpdate(_.id)((ext, tobeInserted) => ext.id -> tobeInserted.id).returning(_.id))
   def batchUpsert(elements: Seq[Element]) = quote{
-    liftQuery(elements).foreach(e => query[Element].insert(e).onConflictUpdate(_.id)((t, e) => t.id -> e.id, (t, e) => t.tenantId -> e.tenantId, (t, e) => t.seqNo -> e.seqNo, (t, e) => t.sectionName -> e.sectionName, (t, e) => t.name -> e.name, (t, e) => t.`type` -> e.`type`, (t, e) => t.action -> e.action, (t, e) => t.optionsType -> e.optionsType, (t, e) => t.values -> e.values, (t, e) => t.formId -> e.formId, (t, e) => t.required -> e.required, (t, e) => t.errors -> e.errors, (t, e) => t.metadata.map(_.updatedAt) -> e.metadata.map(_.updatedAt), (t, e) => t.metadata.map(_.updatedBy) -> e.metadata.map(_.updatedBy)).returning(_.id))
+    liftQuery(elements).foreach(e => query[Element].insert(e).onConflictUpdate(_.id)((t, e) => t.id -> e.id, (t, e) => t.seqNo -> e.seqNo, (t, e) => t.sectionName -> e.sectionName, (t, e) => t.name -> e.name, (t, e) => t.`type` -> e.`type`, (t, e) => t.action -> e.action, (t, e) => t.optionsType -> e.optionsType, (t, e) => t.values -> e.values, (t, e) => t.formId -> e.formId, (t, e) => t.required -> e.required, (t, e) => t.errors -> e.errors, (t, e) => t.metadata.map(_.updatedAt) -> e.metadata.map(_.updatedAt), (t, e) => t.metadata.map(_.updatedBy) -> e.metadata.map(_.updatedBy)).returning(_.id))
   }
   def byFormId(formId: Long)               = quote(elementsQuery.filter(_.formId == lift(Option(formId))))
   def getCreateElementRequestByFormId(formId: Long)               =   quote {

@@ -49,7 +49,6 @@ object Models {
   }
 
   sealed trait IElement extends Embedded {
-    def tenantId: Long
     def id: Long
     def name: String
     def title: String
@@ -71,8 +70,7 @@ object Models {
 
   case class Element(
                       id: Long,
-                      tenantId: Long,
-                      seqNo: Int,
+                      seqNo: Option[Int],
                       name: String = "message",
                       title: String,
                       description: Option[String],
@@ -93,13 +91,12 @@ object Models {
                     ) extends IElement
   object Element {
     implicit val codec: JsonCodec[Element] = DeriveJsonCodec.gen[Element]
-    def toCreateElementRequest(element: Element, valids: Seq[Option[Validations]], options: Seq[Options]) = element.into[Element].transform.copy(id = element.id, tenantId = element.tenantId, seqNo = element.seqNo)
+    def toCreateElementRequest(element: Element, valids: Seq[Option[Validations]], options: Seq[Options]) = element.into[Element].transform.copy(id = element.id, seqNo = element.seqNo)
   }
 
   case class CreateElementRequest(
                                    id: Long,
-                                   tenantId: Long,
-                                   seqNo: Int,
+                                   seqNo: Option[Int],
                                    name: String = "message",
                                    title: String,
                                    description: Option[String],
@@ -120,7 +117,7 @@ object Models {
   }
   object CreateElementRequest{
     implicit val codec: JsonCodec[CreateElementRequest] = DeriveJsonCodec.gen[CreateElementRequest]
-    def toElement(element: CreateElementRequest) = element.into[Element].transform.copy(id = element.id, tenantId = element.tenantId, seqNo = element.seqNo)
+    def toElement(element: CreateElementRequest) = element.into[Element].transform.copy(id = element.id, seqNo = element.seqNo)
   }
 
   /*
@@ -243,15 +240,15 @@ object Models {
 
 
   case class FormSection(title: String, elements: Seq[CreateElementRequest]) {
-    def makeElementsOrdered(): Seq[CreateElementRequest] = elements.zipWithIndex.map(e => e._1.copy(sectionName = Option(title), seqNo = e._2))
+    def makeElementsOrdered(): Seq[CreateElementRequest] = elements.zipWithIndex.map(e => e._1.copy(sectionName = Option(title), seqNo = Some(e._2)))
   }
   object FormSection{
     implicit val codec: JsonCodec[FormSection] = DeriveJsonCodec.gen[FormSection]
   }
   case class CreateFormRequest(
                                 id: Long,
+                                tenantId: Long,
                                 requestId: Option[String],
-                                uid: String,
                                 title: String,
                                 subTitle: Option[String],
                                 sections: Seq[FormSection],
@@ -268,8 +265,8 @@ object Models {
 
   case class Form(
                    id: Long = -1,
+                   tenantId: Long,
                    requestId: Option[String] = None,
-                   uid: String,
                    title: String,
                    subTitle: Option[String],
                    designProperties: Option[DesignProperties] = None,

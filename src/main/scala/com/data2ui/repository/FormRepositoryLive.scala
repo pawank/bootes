@@ -23,7 +23,7 @@ case class FormRepositoryLive(dataSource: DataSource with Closeable, blocking: B
       for {
         id     <- run(FormQueries.upsert(dbForm))
         requestedElements = form.getFormElements()
-        elements: Seq[Element] = requestedElements.map(CreateElementRequest.toElement(_)).map(e => e.copy(formId = Some(id)))
+        elements: Seq[Element] = requestedElements.map(CreateElementRequest.toElement(_)).zipWithIndex.map(e => e._1.copy(seqNo = Option(e._2), formId = Some(id)))
         savedElements <- {
           run(ElementQueries.batchUpsert(elements))
         }
@@ -40,6 +40,7 @@ case class FormRepositoryLive(dataSource: DataSource with Closeable, blocking: B
         }
         fetchedSections <- {
           val sections = fetchedElements.groupBy(_._1.sectionName)
+          println(s"Sections = $sections")
           run(FormQueries.byId(id))
         }
         xs <- {
@@ -88,5 +89,5 @@ object FormQueries {
   def filter(values: Seq[FieldValue])               = quote(query[Form])
   def insertForm(element: Form) = quote(elementsQuery.insert(lift(element)))
   def upsertForm(element: Form) = quote(elementsQuery.update(lift(element)))
-  def upsert(element: Form) = quote(elementsQuery.insert(lift(element)).onConflictUpdate(_.id)((t, e) => t.id -> e.id, (t, e) => t.uid -> e.uid, (t, e) => t.title -> e.title, (t, e) => t.subTitle -> e.subTitle, (t, e) => t.status -> e.status, (t, e) => t.designProperties.map(_.width) -> e.designProperties.map(_.width), (t, e) => t.designProperties.map(_.height) -> e.designProperties.map(_.height),(t, e) => t.designProperties.map(_.fontFamily) -> e.designProperties.map(_.fontFamily),(t, e) => t.designProperties.map(_.backgroundColor) -> e.designProperties.map(_.backgroundColor), (t, e) => t.designProperties.map(_.textColor) -> e.designProperties.map(_.textColor), (t, e) => t.metadata.map(_.updatedAt) -> e.metadata.map(_.updatedAt), (t, e) => t.metadata.map(_.updatedBy) -> e.metadata.map(_.updatedBy)).returning(_.id))
+  def upsert(element: Form) = quote(elementsQuery.insert(lift(element)).onConflictUpdate(_.id)((t, e) => t.id -> e.id, (t, e) => t.tenantId -> e.tenantId, (t, e) => t.title -> e.title, (t, e) => t.subTitle -> e.subTitle, (t, e) => t.status -> e.status, (t, e) => t.designProperties.map(_.width) -> e.designProperties.map(_.width), (t, e) => t.designProperties.map(_.height) -> e.designProperties.map(_.height),(t, e) => t.designProperties.map(_.fontFamily) -> e.designProperties.map(_.fontFamily),(t, e) => t.designProperties.map(_.backgroundColor) -> e.designProperties.map(_.backgroundColor), (t, e) => t.designProperties.map(_.textColor) -> e.designProperties.map(_.textColor), (t, e) => t.metadata.map(_.updatedAt) -> e.metadata.map(_.updatedAt), (t, e) => t.metadata.map(_.updatedBy) -> e.metadata.map(_.updatedBy)).returning(_.id))
 }

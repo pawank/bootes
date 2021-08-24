@@ -108,7 +108,7 @@ object ElementQueries {
     for {
       ele <- query[Element].sortBy(p => p.seqNo)(Ord.asc).filter(x => x.formId == Option(lift(formId)))
       valid <- query[Validations].leftJoin(x => x.elementId == Option(ele.id))
-      opt <- query[Options].leftJoin(x => x.elementId == Option(ele.id))
+      opt <- query[Options].sortBy(p => p.seqNo)(Ord.asc).leftJoin(x => x.elementId == Option(ele.id))
     } yield (ele, valid, opt)
   }
 }

@@ -41,6 +41,7 @@ object Models {
                        id: Long,
                        value: String,
                        text: String,
+                       seqNo: Option[Int] = None,
                        elementId: Option[Long]
                      )
   object Options {
@@ -92,6 +93,7 @@ object Models {
                     ) extends IElement
   object Element {
     implicit val codec: JsonCodec[Element] = DeriveJsonCodec.gen[Element]
+    def toCreateElementRequest(element: Element, valids: Seq[Option[Validations]], options: Seq[Options]) = element.into[Element].transform.copy(id = element.id, tenantId = element.tenantId, seqNo = element.seqNo)
   }
 
   case class CreateElementRequest(

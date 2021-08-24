@@ -59,6 +59,7 @@ create table options (
                       id serial primary key,
                       "value" varchar(255) not null,
                       text varchar(255) not null,
+                      seq_no integer,
                       element_id integer not null,
                       constraint fk_element_id foreign key(element_id) references form_element(id)
 );

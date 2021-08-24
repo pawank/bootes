@@ -89,6 +89,6 @@ object OptionsQueries {
   def upsertOptions(option: Options) = quote(optionsQuery.update(lift(option)))
   def batchUpsert(elements: Seq[Options]) = quote{
     //liftQuery(elements).foreach(e => query[Options].insert(e).onConflictUpdate(_.id)((table, tobeInserted) => ((table.id -> tobeInserted.id))).returning(_.id))
-    liftQuery(elements).foreach(e => query[Options].insert(e).onConflictUpdate(_.id)((table, tobeInserted) => table.id -> tobeInserted.id, (table, tobeInserted) => table.text -> tobeInserted.text,  (table, tobeInserted) => table.value -> tobeInserted.value, (table, tobeInserted) => table.elementId -> tobeInserted.elementId).returning(_.id))
+    liftQuery(elements).foreach(e => query[Options].insert(e).onConflictUpdate(_.id)((table, tobeInserted) => table.id -> tobeInserted.id, (table, tobeInserted) => table.text -> tobeInserted.text,  (table, tobeInserted) => table.value -> tobeInserted.value, (table, tobeInserted) => table.elementId -> tobeInserted.elementId, (t, e) => t.seqNo -> e.seqNo).returning(_.id))
   }
 }

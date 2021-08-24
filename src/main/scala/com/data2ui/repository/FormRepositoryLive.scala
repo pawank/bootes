@@ -32,11 +32,15 @@ case class FormRepositoryLive(dataSource: DataSource with Closeable, blocking: B
           run(ValidationsQueries.batchUpsert(xs.values.toSeq.flatten))
         }
         savedOpts <- {
-          val options: Map[Long, Seq[Options]] = requestedElements.groupBy(_.id).map(v => (v._1, v._2.map(_.options.getOrElse(Seq.empty)).flatten.map(x => x.copy(elementId = Some(v._1)))))
+          val options: Map[Long, Seq[Options]] = requestedElements.groupBy(_.id).map(v => (v._1, v._2.map(_.options.getOrElse(Seq.empty)).flatten.zipWithIndex.map(x => x._1.copy(seqNo = Some(x._2), elementId = Some(v._1)))))
           run(OptionsQueries.batchUpsert(options.values.toSeq.flatten))
         }
         fetchedElements <- {
           run(ElementQueries.getCreateElementRequestByFormId(id))
+        }
+        fetchedSections <- {
+          val sections = fetchedElements.groupBy(_._1.sectionName)
+          run(FormQueries.byId(id))
         }
         xs <- {
           run(FormQueries.byId(id))

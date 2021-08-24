@@ -89,7 +89,7 @@ object ValidationsQueries {
   def insertValidations(valid: Validations) = quote(validsQuery.insert(lift(valid)))
   def upsertValidations(valid: Validations) = quote(validsQuery.update(lift(valid)))
   def batchUpsert(elements: Seq[Validations]) = quote{
-    liftQuery(elements).foreach(e => query[Validations].insert(e).onConflictUpdate(_.id)((ext, tobeInserted) => ((ext.id -> tobeInserted.id))).returning(_.id))
+    liftQuery(elements).foreach(e => query[Validations].insert(e).onConflictUpdate(_.id)((ext, tobeInserted) => ext.id -> tobeInserted.id, (ext, tobeInserted) => ext.elementId -> tobeInserted.elementId, (ext, tobeInserted) => ext.values -> tobeInserted.values, (ext, tobeInserted) => ext.`type` -> tobeInserted.`type`, (ext, tobeInserted) => ext.title -> tobeInserted.title, (ext, tobeInserted) => ext.minimum -> tobeInserted.minimum, (ext, tobeInserted) => ext.maximum -> tobeInserted.maximum).returning(_.id))
     //liftQuery(elements).foreach(e => query[Validations].insert(e).onConflictUpdate(_.id)((ext, tobeInserted) => ((ext.`type` -> tobeInserted.`type`, ext.values -> tobeInserted.values, ext.title -> tobeInserted.title, ext.minimum -> tobeInserted.minimum, ext.maximum -> tobeInserted.maximum, ext.elementId -> tobeInserted.elementId))).returning(_.id))
   }
 }

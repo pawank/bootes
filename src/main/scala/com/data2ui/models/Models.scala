@@ -129,113 +129,6 @@ object Models {
     def toElement(element: CreateElementRequest) = element.into[Element].transform.copy(id = element.id, seqNo = element.seqNo)
   }
 
-  /*
-  case class Message(
-    id: UUID,
-    tenantid: UUID,
-    name: String = "message",
-                    title: String,
-                    description: Option[String],
-                    values: Seq[String],
-                    `type`: String = "String",
-                    required: Option[Boolean] = Option(true),
-                    customerError: Option[String] = None,
-                    errors: Option[Seq[String]] = None,
-                    options: Option[Seq[Options]] = None,
-                    optionsType: Option[String] = None,
-                    validations: Seq[Validations],
-                    config: Option[Config] = Option(Config(delayInSeconds = 1, showProgressBar = true, progressBarUri = None)),
-                    action: Option[Boolean] = Option(false),
-                  ) extends IElement
-  object Message {
-    implicit val codec: JsonCodec[Message] = DeriveJsonCodec.gen[Message]
-  }
-
-  case class Input(
-                    id: UUID,
-                    tenantid: UUID,
-                    name: String,
-                    title: String,
-                           description: Option[String],
-                           values: Seq[String],
-                           `type`: String = "String",
-                           required: Option[Boolean] = Option(true),
-                           customerError: Option[String] = None,
-                           errors: Option[Seq[String]] = None,
-                           options: Option[Seq[Options]] = None,
-                           optionsType: Option[String] = None,
-                           validations: Seq[Validations],
-                           config: Option[Config] = None,
-                           action: Option[Boolean] = Option(false),
-                         ) extends IElement
-  object Input {
-    implicit val codec: JsonCodec[Input] = DeriveJsonCodec.gen[Input]
-  }
-
-  case class Textarea(
-                       id: UUID,
-                       tenantid: UUID,
-                    name: String = "textarea",
-                    title: String,
-                    description: Option[String],
-                    values: Seq[String],
-                    `type`: String = "String",
-                    required: Option[Boolean] = Option(true),
-                    customerError: Option[String] = None,
-                    errors: Option[Seq[String]] = None,
-                    options: Option[Seq[Options]] = None,
-                    optionsType: Option[String] = None,
-                    validations: Seq[Validations],
-                    config: Option[Config] = None,
-                    action: Option[Boolean] = Option(false),
-                  ) extends IElement
-  object Textarea {
-    implicit val codec: JsonCodec[Textarea] = DeriveJsonCodec.gen[Textarea]
-  }
-
-  case class Selection(
-                        tenantid: UUID,
-                        id: UUID,
-                       name: String = "select",
-                       title: String,
-                       description: Option[String],
-                       values: Seq[String],
-                       `type`: String = "String",
-                       required: Option[Boolean] = Option(true),
-                       customerError: Option[String] = None,
-                       errors: Option[Seq[String]] = None,
-                       options: Option[Seq[Options]] = None,
-                       optionsType: Option[String] = None,
-                       validations: Seq[Validations],
-                       config: Option[Config] = None,
-                       action: Option[Boolean] = Option(false),
-                     ) extends IElement
-  object Selection {
-    implicit val codec: JsonCodec[Selection] = DeriveJsonCodec.gen[Selection]
-  }
-
-  case class UserAction(
-                         id: UUID,
-                         tenantid: UUID,
-                        name: String = "action",
-                        title: String,
-                        description: Option[String],
-                        values: Seq[String],
-                        `type`: String = "String",
-                        required: Option[Boolean] = Option(true),
-                        customerError: Option[String] = None,
-                        errors: Option[Seq[String]] = None,
-                        options: Option[Seq[Options]] = None,
-                        optionsType: Option[String] = None,
-                        validations: Seq[Validations],
-                        config: Option[Config] = None,
-                        action: Option[Boolean] = Option(true),
-                      ) extends IElement
-  object UserAction {
-    implicit val codec: JsonCodec[UserAction] = DeriveJsonCodec.gen[UserAction]
-  }
-*/
-
   case class DesignProperties (
                                 width: Option[Int],
                                 height: Option[Int],
@@ -292,22 +185,6 @@ object Models {
     }
   }
 
-  /*
-  case class UiForm (
-                   id: Long = -1,
-                   requestId: Option[String],
-                   uid: String,
-                   title: String,
-                   subTitle: Option[String],
-                   designProperties: Option[DesignProperties],
-                   elements: List[Element],
-                   status: Option[String],
-                   metadata: Option[Metadata] = None
-                 )
-  object UiForm {
-    implicit val codec: JsonCodec[UiForm] = DeriveJsonCodec.gen[UiForm]
-  }
-   */
   case class UiRequest(requestId: String, data: List[Element])
   object UiRequest {
     implicit val codec: JsonCodec[UiRequest] = DeriveJsonCodec.gen[UiRequest]

@@ -28,7 +28,7 @@ object FormEndpoints extends RequestOps {
     implicit val serviceContext: ServiceContext = ServiceContext(token = jwtClaim.access_token.getOrElse(""), requestId = UUID.fromString(jwtClaim.requestId.getOrElse("")))
     Http
       .collectM[Request] {
-        case Method.GET -> Root / "bootes" / "v1" / "forms" =>
+        case Method.GET -> Root / "bootes" / "v1" / "forms" / "search" =>
           for {
             //_ <- ZIO.succeed(scribe.info("Getting list of all forms"))
             _ <- log.locally(CorrelationId(serviceContext.requestId).andThen(DebugJsonLog(serviceContext.toString)))(
@@ -38,7 +38,10 @@ object FormEndpoints extends RequestOps {
           } yield Response.jsonString(forms.toJson)
         case Method.GET -> Root / "bootes" / "v1" / "forms" / id =>
           for {
-            user <- FormService.get(UUID.fromString(id))
+            user <- {
+              println(s"Form ID = $id")
+              FormService.get(UUID.fromString(id))
+            }
           } yield Response.jsonString(user.toJson)
         case req@Method.POST -> Root / "bootes" / "v1" / "forms" =>
           for {

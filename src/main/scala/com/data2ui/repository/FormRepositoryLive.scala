@@ -19,32 +19,7 @@ case class FormRepositoryLive(dataSource: DataSource with Closeable, blocking: B
 
   import com.data2ui.repository.repository.FormContext._
 
-  override def upsert(form: CreateFormRequest): Task[CreateFormRequest] = {
-    val dbForm = CreateFormRequest.toForm(form)
-    println(s"Form to be inserted or updated = $dbForm")
-    val formTask = {
-      transaction {
-        for {
-          id     <- run(FormQueries.upsert(dbForm))
-          requestedElements = form.getFormElements()
-          elements: Seq[Element] = requestedElements.map(CreateElementRequest.toElement(_)).zipWithIndex.map(e => e._1.copy(seqNo = Option(e._2), formId = Some(id)))
-          savedElements <- {
-            run(ElementQueries.batchUpsert(elements))
-          }
-          savedValids <- {
-            val xs: Map[UUID, Seq[Validations]] = requestedElements.groupBy(_.id).map(v => (v._1, v._2.map(_.validations).flatten.map(x => x.copy(elementId = Some(v._1)))))
-            run(ValidationsQueries.batchUpsert(xs.values.toSeq.flatten))
-          }
-          savedOpts <- {
-            val options: Map[UUID, Seq[Options]] = requestedElements.groupBy(_.id).map(v => (v._1, v._2.map(_.options.getOrElse(Seq.empty)).flatten.zipWithIndex.map(x => x._1.copy(seqNo = Some(x._2), elementId = Some(v._1)))))
-            run(OptionsQueries.batchUpsert(options.values.toSeq.flatten))
-          }
-          xs <- {
-            run(FormQueries.byId(id))
-          }
-        } yield xs.headOption.getOrElse(throw new Exception("Insert or update failed!"))
-      }.dependOnDataSource().provide(dataSourceLayer)
-    }
+  def getCreateFormRequest(formTask: Task[Form]): Task[CreateFormRequest] = {
     val r = for {
       f <- formTask
       fetchedElements <- {
@@ -91,13 +66,43 @@ case class FormRepositoryLive(dataSource: DataSource with Closeable, blocking: B
     r
   }
 
+  override def upsert(form: CreateFormRequest): Task[CreateFormRequest] = {
+    val dbForm = CreateFormRequest.toForm(form)
+    println(s"Form to be inserted or updated = $dbForm")
+    val formTask = {
+      transaction {
+        for {
+          id     <- run(FormQueries.upsert(dbForm))
+          requestedElements = form.getFormElements()
+          elements: Seq[Element] = requestedElements.map(CreateElementRequest.toElement(_)).zipWithIndex.map(e => e._1.copy(seqNo = Option(e._2), formId = Some(id)))
+          savedElements <- {
+            run(ElementQueries.batchUpsert(elements))
+          }
+          savedValids <- {
+            val xs: Map[UUID, Seq[Validations]] = requestedElements.groupBy(_.id).map(v => (v._1, v._2.map(_.validations).flatten.map(x => x.copy(elementId = Some(v._1)))))
+            run(ValidationsQueries.batchUpsert(xs.values.toSeq.flatten))
+          }
+          savedOpts <- {
+            val options: Map[UUID, Seq[Options]] = requestedElements.groupBy(_.id).map(v => (v._1, v._2.map(_.options.getOrElse(Seq.empty)).flatten.zipWithIndex.map(x => x._1.copy(seqNo = Some(x._2), elementId = Some(v._1)))))
+            run(OptionsQueries.batchUpsert(options.values.toSeq.flatten))
+          }
+          xs <- {
+            run(FormQueries.byId(id))
+          }
+        } yield xs.headOption.getOrElse(throw new Exception("Insert or update failed!"))
+      }.dependOnDataSource().provide(dataSourceLayer)
+    }
+    getCreateFormRequest(formTask)
+  }
+
   override def all: Task[Seq[Form]] = run(FormQueries.elementsQuery).dependOnDataSource().provide(dataSourceLayer)
 
-  override def findById(id: UUID): Task[Form] = {
-    for {
+  override def findById(id: UUID): Task[CreateFormRequest] = {
+    val formTask = for {
       results <- run(FormQueries.byId(id)).dependOnDataSource().provide(dataSourceLayer)
       element    <- ZIO.fromOption(results.headOption).orElseFail(NotFoundException(s"Could not find element with id $id", id.toString))
     } yield element
+    getCreateFormRequest(formTask)
   }
 
   override def findByTitle(name: String): Task[Seq[Form]] = {

@@ -106,7 +106,7 @@ object ElementQueries {
   def byFormId(formId: Long)               = quote(elementsQuery.filter(_.formId == lift(Option(formId))))
   def getCreateElementRequestByFormId(formId: Long)               =   quote {
     for {
-      ele <- query[Element].sortBy(p => p.seqNo)(Ord.asc).filter(x => x.formId == Option(lift(formId)))
+      ele <- query[Element].sortBy(p => (p.sectionSeqNo, p.seqNo))(Ord(Ord.asc, Ord.asc)).filter(x => x.formId == Option(lift(formId)))
       valid <- query[Validations].leftJoin(x => x.elementId == Option(ele.id))
       opt <- query[Options].sortBy(p => p.seqNo)(Ord.asc).leftJoin(x => x.elementId == Option(ele.id))
     } yield (ele, valid, opt)

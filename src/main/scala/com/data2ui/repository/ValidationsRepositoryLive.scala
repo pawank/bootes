@@ -79,7 +79,7 @@ object ValidationsQueries {
 
   // NOTE - if you put the type here you get a 'dynamic query' - which will never wind up working...
   implicit val validsSchemaMeta = schemaMeta[Validations](""""validations"""")
-  implicit val validsInsertMeta = insertMeta[Validations](_.id)
+  //implicit val validsInsertMeta = insertMeta[Validations](_.id)
 
   val validsQuery                   = quote(query[Validations])
   def byId(id: Long)               = quote(validsQuery.filter(_.id == lift(id)))

@@ -78,7 +78,7 @@ object OptionsQueries {
 
   // NOTE - if you put the type here you get a 'dynamic query' - which will never wind up working...
   implicit val optionsSchemaMeta = schemaMeta[Options](""""options"""")
-  implicit val optionsInsertMeta = insertMeta[Options](_.id)
+  //implicit val optionsInsertMeta = insertMeta[Options](_.id)
 
   val optionsQuery                   = quote(query[Options])
   def byId(id: Long)               = quote(optionsQuery.filter(_.id == lift(id)))

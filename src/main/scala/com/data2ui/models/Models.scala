@@ -83,6 +83,7 @@ object Models {
                       optionsType: Option[String] = None,
                       //validations: Seq[Validations],
                       sectionName: Option[String],
+                      sectionSeqNo: Option[Int],
                       config: Option[Config] = Option(Config(delayInSeconds = 1, showProgressBar = true, progressBarUri = None)),
                       action: Option[Boolean] = Option(false),
                       status: Option[String] = Option("active"),
@@ -91,7 +92,14 @@ object Models {
                     ) extends IElement
   object Element {
     implicit val codec: JsonCodec[Element] = DeriveJsonCodec.gen[Element]
-    def toCreateElementRequest(element: Element, valids: Seq[Option[Validations]], options: Seq[Options]) = element.into[Element].transform.copy(id = element.id, seqNo = element.seqNo)
+    def toCreateElementRequest(element: Element, valids: Seq[Validations], opts: Option[Seq[Options]]) = {
+      CreateElementRequest(id = element.id, seqNo = element.seqNo, name = element.name, title = element.title, description = element.description,
+        values = element.values, `type` = element.`type`, required = element.required,
+        customerError = element.customerError, errors = element.errors, options = opts,
+        optionsType = element.optionsType, validations = valids, sectionName = element.sectionName, sectionSeqNo = element.sectionSeqNo,
+        config = element.config, action = element.action,  metadata = element.metadata,
+        formId = element.formId)
+    }
   }
 
   case class CreateElementRequest(
@@ -109,6 +117,7 @@ object Models {
                                    optionsType: Option[String] = None,
                                    validations: Seq[Validations],
                                    sectionName: Option[String],
+                                   sectionSeqNo: Option[Int],
                                    config: Option[Config] = Option(Config(delayInSeconds = 1, showProgressBar = true, progressBarUri = None)),
                                    action: Option[Boolean] = Option(false),
                                    metadata: Option[Metadata] = Some(Metadata.default),
@@ -239,7 +248,7 @@ object Models {
   }
 
 
-  case class FormSection(title: String, elements: Seq[CreateElementRequest]) {
+  case class FormSection(title: String, seqNo: Option[Int], elements: Seq[CreateElementRequest]) {
     def makeElementsOrdered(): Seq[CreateElementRequest] = elements.zipWithIndex.map(e => e._1.copy(sectionName = Option(title), seqNo = Some(e._2)))
   }
   object FormSection{
@@ -253,14 +262,15 @@ object Models {
                                 subTitle: Option[String],
                                 sections: Seq[FormSection],
                                 designProperties: Option[DesignProperties],
-                                status: Option[String]
+                                status: Option[String],
+                                metadata: Option[Metadata] = Some(Metadata.default)
                               ) {
-    def getFormElements() = sections.map(_.elements).flatten
+    def getFormElements() = sections.zipWithIndex.map(s => s._1.elements.map(_.copy(sectionName = Some(s._1.title), sectionSeqNo = Some(s._2)))).flatten
   }
   object CreateFormRequest{
     implicit val codec: JsonCodec[CreateFormRequest] = DeriveJsonCodec.gen[CreateFormRequest]
 
-    implicit def toForm(record: CreateFormRequest): Form = record.into[Form].transform.copy(id = record.id, metadata = Some(Metadata.default))
+    implicit def toForm(record: CreateFormRequest): Form = record.into[Form].transform.copy(id = record.id, metadata = record.metadata)
   }
 
   case class Form(
@@ -275,6 +285,11 @@ object Models {
                  )
   object Form {
     implicit val codec: JsonCodec[Form] = DeriveJsonCodec.gen[Form]
+
+    implicit def toCreateFormRequest(record: Form, sections: List[FormSection]): CreateFormRequest = {
+      CreateFormRequest(id = record.id, tenantId = record.tenantId, requestId = record.requestId, title = record.title,
+        subTitle = record.subTitle, sections = sections, designProperties = record.designProperties, status = record.status, metadata = record.metadata)
+    }
   }
 
   /*

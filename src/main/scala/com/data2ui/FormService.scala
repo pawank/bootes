@@ -28,7 +28,7 @@ import scala.language.implicitConversions
 trait FormService {
   def create(request: CreateFormRequest)(implicit ctx: ServiceContext): Task[Form]
   def update(id: Long, request: CreateFormRequest)(implicit ctx: ServiceContext): Task[Form]
-  def upsert(request: CreateFormRequest)(implicit ctx: ServiceContext): Task[Form]
+  def upsert(request: CreateFormRequest)(implicit ctx: ServiceContext): Task[CreateFormRequest]
   def all()(implicit ctx: ServiceContext): Task[Seq[Form]]
   def get(id: Long)(implicit ctx: ServiceContext): Task[Form]
   def get(code: String)(implicit ctx: ServiceContext): Task[Form]
@@ -46,7 +46,7 @@ case class FormServiceLive(repository: FormRepository, console: Console.Service)
     ???
   }
 
-  override def upsert(request: CreateFormRequest)(implicit ctx: ServiceContext): Task[Form] = {
+  override def upsert(request: CreateFormRequest)(implicit ctx: ServiceContext): Task[CreateFormRequest] = {
     repository.upsert(request)
   }
 

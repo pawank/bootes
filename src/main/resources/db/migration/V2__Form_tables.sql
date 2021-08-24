@@ -47,6 +47,7 @@ create table form_element (
                       section_id integer,
                       form_id integer not null,
                       section_name varchar(255) not null,
+                      section_seq_no integer not null,
                       constraint fk_form_section_id foreign key(section_id) references "section"(id),
                       constraint fk_form_elements_form_id foreign key(form_id) references form(id)
 );

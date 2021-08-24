@@ -9,6 +9,7 @@ import zio._
 import zio.blocking.Blocking
 
 import java.io.Closeable
+import java.util.UUID
 import javax.sql.DataSource
 import scala.::
 import scala.collection.immutable.SortedMap
@@ -31,11 +32,11 @@ case class FormRepositoryLive(dataSource: DataSource with Closeable, blocking: B
             run(ElementQueries.batchUpsert(elements))
           }
           savedValids <- {
-            val xs: Map[Long, Seq[Validations]] = requestedElements.groupBy(_.id).map(v => (v._1, v._2.map(_.validations).flatten.map(x => x.copy(elementId = Some(v._1)))))
+            val xs: Map[UUID, Seq[Validations]] = requestedElements.groupBy(_.id).map(v => (v._1, v._2.map(_.validations).flatten.map(x => x.copy(elementId = Some(v._1)))))
             run(ValidationsQueries.batchUpsert(xs.values.toSeq.flatten))
           }
           savedOpts <- {
-            val options: Map[Long, Seq[Options]] = requestedElements.groupBy(_.id).map(v => (v._1, v._2.map(_.options.getOrElse(Seq.empty)).flatten.zipWithIndex.map(x => x._1.copy(seqNo = Some(x._2), elementId = Some(v._1)))))
+            val options: Map[UUID, Seq[Options]] = requestedElements.groupBy(_.id).map(v => (v._1, v._2.map(_.options.getOrElse(Seq.empty)).flatten.zipWithIndex.map(x => x._1.copy(seqNo = Some(x._2), elementId = Some(v._1)))))
             run(OptionsQueries.batchUpsert(options.values.toSeq.flatten))
           }
           xs <- {
@@ -92,7 +93,7 @@ case class FormRepositoryLive(dataSource: DataSource with Closeable, blocking: B
 
   override def all: Task[Seq[Form]] = run(FormQueries.elementsQuery).dependOnDataSource().provide(dataSourceLayer)
 
-  override def findById(id: Long): Task[Form] = {
+  override def findById(id: UUID): Task[Form] = {
     for {
       results <- run(FormQueries.byId(id)).dependOnDataSource().provide(dataSourceLayer)
       element    <- ZIO.fromOption(results.headOption).orElseFail(NotFoundException(s"Could not find element with id $id", id.toString))
@@ -124,7 +125,7 @@ object FormQueries {
   //implicit val elementInsertMeta = insertMeta[Form](_.id)
 
   val elementsQuery                   = quote(query[Form])
-  def byId(id: Long)               = quote(elementsQuery.filter(_.id == lift(id)))
+  def byId(id: UUID)               = quote(elementsQuery.filter(_.id == lift(id)))
   def byTitle(name: String)               = quote(elementsQuery.filter(_.title == lift(name)))
   def filter(values: Seq[FieldValue])               = quote(query[Form])
   def insertForm(element: Form) = quote(elementsQuery.insert(lift(element)))

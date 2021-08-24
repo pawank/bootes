@@ -25,31 +25,31 @@ object Models {
   }
 
   case class Validations (
-                           id: Long,
+                           id: UUID,
                            `type`: String,
                            title: String,
                            minimum: Option[Int],
                            maximum: Option[Int],
                            values: Option[Seq[String]],
-                           elementId: Option[Long]
+                           elementId: Option[UUID]
                          )
   object Validations {
     implicit val codec: JsonCodec[Validations] = DeriveJsonCodec.gen[Validations]
   }
 
   case class Options (
-                       id: Long,
+                       id: UUID,
                        value: String,
                        text: String,
                        seqNo: Option[Int] = None,
-                       elementId: Option[Long]
+                       elementId: Option[UUID]
                      )
   object Options {
     implicit val codec: JsonCodec[Options] = DeriveJsonCodec.gen[Options]
   }
 
   sealed trait IElement extends Embedded {
-    def id: Long
+    def id: UUID
     def name: String
     def title: String
     def description: Option[String]
@@ -69,7 +69,7 @@ object Models {
   }
 
   case class Element(
-                      id: Long,
+                      id: UUID,
                       seqNo: Option[Int],
                       name: String = "message",
                       title: String,
@@ -88,7 +88,7 @@ object Models {
                       action: Option[Boolean] = Option(false),
                       status: Option[String] = Option("active"),
                       metadata: Option[Metadata] = None,
-                      formId: Option[Long]
+                      formId: Option[UUID]
                     ) extends IElement
   object Element {
     implicit val codec: JsonCodec[Element] = DeriveJsonCodec.gen[Element]
@@ -103,7 +103,7 @@ object Models {
   }
 
   case class CreateElementRequest(
-                                   id: Long,
+                                   id: UUID,
                                    seqNo: Option[Int],
                                    name: String = "message",
                                    title: String,
@@ -121,7 +121,7 @@ object Models {
                                    config: Option[Config] = Option(Config(delayInSeconds = 1, showProgressBar = true, progressBarUri = None)),
                                    action: Option[Boolean] = Option(false),
                                    metadata: Option[Metadata] = Some(Metadata.default),
-                                   formId: Option[Long]
+                                   formId: Option[UUID]
                                  ) {
   }
   object CreateElementRequest{
@@ -131,8 +131,8 @@ object Models {
 
   /*
   case class Message(
-    id: Long,
-    tenantId: Long,
+    id: UUID,
+    tenantid: UUID,
     name: String = "message",
                     title: String,
                     description: Option[String],
@@ -152,8 +152,8 @@ object Models {
   }
 
   case class Input(
-                    id: Long,
-                    tenantId: Long,
+                    id: UUID,
+                    tenantid: UUID,
                     name: String,
                     title: String,
                            description: Option[String],
@@ -173,8 +173,8 @@ object Models {
   }
 
   case class Textarea(
-                       id: Long,
-                       tenantId: Long,
+                       id: UUID,
+                       tenantid: UUID,
                     name: String = "textarea",
                     title: String,
                     description: Option[String],
@@ -194,8 +194,8 @@ object Models {
   }
 
   case class Selection(
-                        tenantId: Long,
-                        id: Long,
+                        tenantid: UUID,
+                        id: UUID,
                        name: String = "select",
                        title: String,
                        description: Option[String],
@@ -215,8 +215,8 @@ object Models {
   }
 
   case class UserAction(
-                         id: Long,
-                         tenantId: Long,
+                         id: UUID,
+                         tenantid: UUID,
                         name: String = "action",
                         title: String,
                         description: Option[String],
@@ -255,9 +255,9 @@ object Models {
     implicit val codec: JsonCodec[FormSection] = DeriveJsonCodec.gen[FormSection]
   }
   case class CreateFormRequest(
-                                id: Long,
-                                tenantId: Long,
-                                requestId: Option[String],
+                                id: UUID,
+                                tenantId: Int,
+                                requestId: Option[UUID],
                                 title: String,
                                 subTitle: Option[String],
                                 sections: Seq[FormSection],
@@ -274,9 +274,9 @@ object Models {
   }
 
   case class Form(
-                   id: Long = -1,
-                   tenantId: Long,
-                   requestId: Option[String] = None,
+                   id: UUID,
+                   tenantId: Int,
+                   requestId: Option[UUID] = None,
                    title: String,
                    subTitle: Option[String],
                    designProperties: Option[DesignProperties] = None,

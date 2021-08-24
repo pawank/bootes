@@ -10,6 +10,7 @@ import zio._
 import zio.blocking.Blocking
 
 import java.io.Closeable
+import java.util.UUID
 import javax.sql.DataSource
 
 case class FormElementsRepositoryLive(dataSource: DataSource with Closeable, blocking: Blocking.Service) extends FormElementsRepository {
@@ -38,7 +39,7 @@ case class FormElementsRepositoryLive(dataSource: DataSource with Closeable, blo
 
   override def all: Task[Seq[Element]] = run(ElementQueries.elementsQuery).dependOnDataSource().provide(dataSourceLayer)
 
-  override def findById(id: Long): Task[Element] = {
+  override def findById(id: UUID): Task[Element] = {
     for {
       results <- run(ElementQueries.byId(id)).dependOnDataSource().provide(dataSourceLayer)
       element    <- ZIO.fromOption(results.headOption).orElseFail(NotFoundException(s"Could not find element with id $id", id.toString))
@@ -59,7 +60,7 @@ case class FormElementsRepositoryLive(dataSource: DataSource with Closeable, blo
     } yield xs
   }
 
-  override def filterByIds(ids: List[Long]): Task[Seq[Element]] = {
+  override def filterByIds(ids: List[UUID]): Task[Seq[Element]] = {
     for {
       results <- run(ElementQueries.filterByIds(ids)).dependOnDataSource().provide(dataSourceLayer)
       xs <- ZIO.effect(results).orElseFail(NotFoundException(s"Could not find elements with input criteria, ${ids.toString()}", ids.mkString(", ")))
@@ -93,18 +94,18 @@ object ElementQueries {
   //implicit val elementInsertMeta = insertMeta[Element](_.id)
 
   val elementsQuery                   = quote(query[Element])
-  def byId(id: Long)               = quote(elementsQuery.filter(_.id == lift(id)))
+  def byId(id: UUID)               = quote(elementsQuery.filter(_.id == lift(id)))
   def byName(name: String)               = quote(elementsQuery.filter(_.name == lift(name)))
   def filter(values: Seq[FieldValue])               = quote(elementsQuery.filter(element => liftQuery(values.map(_.value)).contains(element.id)))
-  def filterByIds(ids: Seq[Long])               = quote(elementsQuery.filter(element => liftQuery(ids).contains(element.id)))
+  def filterByIds(ids: Seq[UUID])               = quote(elementsQuery.filter(element => liftQuery(ids).contains(element.id)))
   def insertElement(element: Element) = quote(elementsQuery.insert(lift(element)))
   def upsertElement(element: Element) = quote(elementsQuery.update(lift(element)))
   def upsert(element: Element) = quote(elementsQuery.insert(lift(element)).onConflictUpdate(_.id)((ext, tobeInserted) => ext.id -> tobeInserted.id).returning(_.id))
   def batchUpsert(elements: Seq[Element]) = quote{
     liftQuery(elements).foreach(e => query[Element].insert(e).onConflictUpdate(_.id)((t, e) => t.id -> e.id, (t, e) => t.seqNo -> e.seqNo, (t, e) => t.sectionName -> e.sectionName, (t, e) => t.name -> e.name, (t, e) => t.`type` -> e.`type`, (t, e) => t.action -> e.action, (t, e) => t.optionsType -> e.optionsType, (t, e) => t.values -> e.values, (t, e) => t.formId -> e.formId, (t, e) => t.required -> e.required, (t, e) => t.errors -> e.errors, (t, e) => t.metadata.map(_.updatedAt) -> e.metadata.map(_.updatedAt), (t, e) => t.metadata.map(_.updatedBy) -> e.metadata.map(_.updatedBy)).returning(_.id))
   }
-  def byFormId(formId: Long)               = quote(elementsQuery.filter(_.formId == lift(Option(formId))))
-  def getCreateElementRequestByFormId(formId: Long)               =   quote {
+  def byFormId(formId: UUID)               = quote(elementsQuery.filter(_.formId == lift(Option(formId))))
+  def getCreateElementRequestByFormId(formId: UUID)               =   quote {
     for {
       ele <- query[Element].sortBy(p => (p.sectionSeqNo, p.seqNo))(Ord(Ord.asc, Ord.asc)).filter(x => x.formId == Option(lift(formId)))
       valid <- query[Validations].leftJoin(x => x.elementId == Option(ele.id))

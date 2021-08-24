@@ -6,6 +6,7 @@ import zio.json.{DeriveJsonCodec, JsonCodec}
 
 import java.sql.{Timestamp, Types}
 import java.time.{Instant, ZoneId, ZonedDateTime}
+import java.util.UUID
 
 package object repository {
   import java.nio.charset.Charset
@@ -32,6 +33,8 @@ package object repository {
     implicit val jsonbEncoder: Encoder[JSONB] = encoder(Types.BINARY, (idx, value, row) => row.setBytes(idx, value.bytes))
     implicit val zoneDateTimeEncoder: Encoder[ZonedDateTime] = encoder(Types.TIMESTAMP_WITH_TIMEZONE, (index, value, row) => row.setTimestamp(index, Timestamp.from(value.toInstant)))
     implicit val zoneDateTimeDecoder: Decoder[ZonedDateTime] = decoder((index, row) => { ZonedDateTime.ofInstant(row.getTimestamp(index).toInstant, ZoneId.of("UTC")) })
+    //implicit val uuidDecoder: Decoder[UUID] = decoder((index, row) => { UUID.fromString(row.getString(index)) })
+    //implicit val uuidEncoder: Encoder[UUID] = encoder(Types.VARCHAR, (idx, value, row) => row.setString(idx, value.toString))
   }
 
 

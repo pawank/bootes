@@ -5,6 +5,8 @@ import io.getquill.context.ZioJdbc.QDataSource
 import zio._
 import zio.macros.accessible
 
+import java.util.UUID
+
 
 case class FieldValue(field: String, value: String)
 
@@ -13,7 +15,7 @@ trait FormRepository {
   def upsert(form: CreateFormRequest): Task[CreateFormRequest]
   def all: Task[Seq[Form]]
   def filter(values: Seq[FieldValue]): Task[Seq[Form]]
-  def findById(id: Long): Task[Form]
+  def findById(id: UUID): Task[Form]
   def findByTitle(code: String): Task[Seq[Form]]
 }
 

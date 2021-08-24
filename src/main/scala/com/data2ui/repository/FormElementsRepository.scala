@@ -5,6 +5,8 @@ import io.getquill.context.ZioJdbc.QDataSource
 import zio._
 import zio.macros.accessible
 
+import java.util.UUID
+
 
 @accessible
 trait FormElementsRepository {
@@ -14,8 +16,8 @@ trait FormElementsRepository {
   def update(element: Element): Task[Element]
   def all: Task[Seq[Element]]
   def filter(values: Seq[FieldValue]): Task[Seq[Element]]
-  def filterByIds(ids: List[Long]): Task[Seq[Element]]
-  def findById(id: Long): Task[Element]
+  def filterByIds(ids: List[UUID]): Task[Seq[Element]]
+  def findById(id: UUID): Task[Element]
   def findByName(code: String): Task[Seq[Element]]
 }
 

@@ -38,14 +38,14 @@ object FormEndpoints extends RequestOps {
           } yield Response.jsonString(forms.toJson)
         case Method.GET -> Root / "bootes" / "v1" / "forms" / id =>
           for {
-            user <- FormService.get(id.toInt)
+            user <- FormService.get(UUID.fromString(id))
           } yield Response.jsonString(user.toJson)
         case req@Method.POST -> Root / "bootes" / "v1" / "forms" =>
           for {
             request <- extractBodyFromJson[CreateFormRequest](req)
             results <- {
               val orederedReq = request.copy(sections = request.sections.map(s => s.copy(elements = s.makeElementsOrdered())))
-              FormService.upsert(orederedReq)(serviceContext.copy(requestId = request.requestId.map(UUID.fromString(_)).getOrElse(serviceContext.requestId)))
+              FormService.upsert(orederedReq)(serviceContext.copy(requestId = request.requestId.getOrElse(serviceContext.requestId)))
             }
           } yield Response.jsonString(results.toJson)
       }

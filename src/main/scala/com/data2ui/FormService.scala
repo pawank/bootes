@@ -21,16 +21,17 @@ import zio.logging.{LogAnnotation, Logging, log}
 import zio.prelude.Validation
 
 import java.time.{Instant, LocalDateTime, ZoneId, ZonedDateTime}
+import java.util.UUID
 import scala.language.implicitConversions
 
 
 @accessible
 trait FormService {
   def create(request: CreateFormRequest)(implicit ctx: ServiceContext): Task[Form]
-  def update(id: Long, request: CreateFormRequest)(implicit ctx: ServiceContext): Task[Form]
+  def update(id: UUID, request: CreateFormRequest)(implicit ctx: ServiceContext): Task[Form]
   def upsert(request: CreateFormRequest)(implicit ctx: ServiceContext): Task[CreateFormRequest]
   def all()(implicit ctx: ServiceContext): Task[Seq[Form]]
-  def get(id: Long)(implicit ctx: ServiceContext): Task[Form]
+  def get(id: UUID)(implicit ctx: ServiceContext): Task[Form]
   def get(code: String)(implicit ctx: ServiceContext): Task[Form]
   def getByEmail(email: String)(implicit ctx: ServiceContext): Task[Form]
   def logout(id: String, inputRequest: LogoutRequest)(implicit ctx: ServiceContext): Task[ResponseMessage]
@@ -55,9 +56,9 @@ case class FormServiceLive(repository: FormRepository, console: Console.Service)
     _     <- console.putStrLn(s"Forms: ${elements.map(_.title).mkString(",")}")
   } yield elements.sortBy(_.id)
 
-  override def get(id: Long)(implicit ctx: ServiceContext): Task[Form] = repository.findById(id)
+  override def get(id: UUID)(implicit ctx: ServiceContext): Task[Form] = repository.findById(id)
 
-  override def update(id: Long, request: CreateFormRequest)(implicit ctx: ServiceContext): Task[Form] =  {
+  override def update(id: UUID, request: CreateFormRequest)(implicit ctx: ServiceContext): Task[Form] =  {
     ???
   }
 

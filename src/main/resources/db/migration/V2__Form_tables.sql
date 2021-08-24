@@ -1,7 +1,7 @@
 create table form (
-                      id serial primary key,
+                      id uuid DEFAULT uuid_generate_v4() primary key,
                       tenant_id int not null,
-                      request_id varchar(255),
+                      request_id uuid,
                       title varchar(255) not null,
                       sub_title varchar(255),
                       width int,
@@ -18,13 +18,13 @@ create table form (
 create unique index idx_tenant_title_form on form(tenant_id, title);
 
 create table "section" (
-                      id serial primary key,
-                      form_id integer not null,
+                      id uuid DEFAULT uuid_generate_v4() primary key,
+                      form_id uuid not null,
                       constraint fk_section_form_id foreign key(form_id) references form(id)
 );
 
 create table form_element (
-                      id serial primary key,
+                      id uuid DEFAULT uuid_generate_v4() primary key,
                       seq_no integer not null,
                       name varchar(255) not null,
                       title varchar(255) not null,
@@ -44,33 +44,31 @@ create table form_element (
                       updated_at timestamp,
                       created_by varchar(255) not null,
                       updated_by varchar(255),
-                      section_id integer,
-                      form_id integer not null,
+                      form_id uuid not null,
                       section_name varchar(255) not null,
                       section_seq_no integer not null,
-                      constraint fk_form_section_id foreign key(section_id) references "section"(id),
                       constraint fk_form_elements_form_id foreign key(form_id) references form(id)
 );
 create index idx_name_form_element on form_element(name);
 create index idx_title_form_element on form_element(title);
 
 create table options (
-                      id serial primary key,
+                      id uuid DEFAULT uuid_generate_v4() primary key,
                       "value" varchar(255) not null,
                       text varchar(255) not null,
                       seq_no integer,
-                      element_id integer not null,
+                      element_id uuid not null,
                       constraint fk_element_id foreign key(element_id) references form_element(id)
 );
 
 create table validations (
-                      id serial primary key,
+                      id uuid DEFAULT uuid_generate_v4() primary key,
                       type varchar(255) not null,
                       title varchar(255) not null,
                       minimum int,
                       maximum int,
                       "values" varchar[],
-                      element_id integer not null,
+                      element_id uuid not null,
                       constraint fk_form_element_id foreign key(element_id) references form_element(id)
 );
 create index idx_validations_title on validations (title);

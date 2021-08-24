@@ -5,6 +5,8 @@ import io.getquill.context.ZioJdbc.QDataSource
 import zio._
 import zio.macros.accessible
 
+import java.util.UUID
+
 @accessible
 trait OptionsRepository {
   def create(option: Options): Task[Options]
@@ -13,7 +15,7 @@ trait OptionsRepository {
   def batchUpsert(options: Seq[Options]): Task[Seq[Options]]
   def all: Task[Seq[Options]]
   def filter(values: Seq[FieldValue]): Task[Seq[Options]]
-  def findById(id: Long): Task[Options]
+  def findById(id: UUID): Task[Options]
   def findByName(code: String): Task[Seq[Options]]
 }
 

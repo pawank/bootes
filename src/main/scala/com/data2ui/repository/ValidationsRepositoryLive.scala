@@ -1,5 +1,6 @@
 package com.data2ui.repository
 
+import zio.prelude._
 import com.data2ui.models.Models.{Options, Validations}
 import com.data2ui.repository.FormRepository
 import com.data2ui.repository.OptionsQueries.optionsQuery
@@ -9,6 +10,7 @@ import zio._
 import zio.blocking.Blocking
 
 import java.io.Closeable
+import java.util.UUID
 import javax.sql.DataSource
 
 case class ValidationsRepositoryLive(dataSource: DataSource with Closeable, blocking: Blocking.Service) extends ValidationsRepository {
@@ -36,7 +38,7 @@ case class ValidationsRepositoryLive(dataSource: DataSource with Closeable, bloc
 
   override def all: Task[Seq[Validations]] = run(ValidationsQueries.validsQuery).dependOnDataSource().provide(dataSourceLayer)
 
-  override def findById(id: Long): Task[Validations] = {
+  override def findById(id: UUID): Task[Validations] = {
     for {
       results <- run(ValidationsQueries.byId(id)).dependOnDataSource().provide(dataSourceLayer)
       valid    <- ZIO.fromOption(results.headOption).orElseFail(NotFoundException(s"Could not find valid with id $id", id.toString))
@@ -82,8 +84,8 @@ object ValidationsQueries {
   //implicit val validsInsertMeta = insertMeta[Validations](_.id)
 
   val validsQuery                   = quote(query[Validations])
-  def byId(id: Long)               = quote(validsQuery.filter(_.id == lift(id)))
-  def filterByIds(ids: Seq[Long])               = quote(validsQuery.filter(element => liftQuery(ids).contains(element.id)))
+  def byId(id: UUID)               = quote(validsQuery.filter(_.id == lift(id)))
+  def filterByIds(ids: Seq[UUID])               = quote(validsQuery.filter(element => liftQuery(ids).contains(element.id)))
   def byType(value: String)               = quote(validsQuery.filter(_.`type` == lift(value)))
   def filter(values: Seq[FieldValue])               = quote(query[Validations])
   def insertValidations(valid: Validations) = quote(validsQuery.insert(lift(valid)))

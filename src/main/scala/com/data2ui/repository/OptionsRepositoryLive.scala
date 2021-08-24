@@ -9,6 +9,7 @@ import zio._
 import zio.blocking.Blocking
 
 import java.io.Closeable
+import java.util.UUID
 import javax.sql.DataSource
 
 case class OptionsRepositoryLive(dataSource: DataSource with Closeable, blocking: Blocking.Service) extends OptionsRepository {
@@ -35,7 +36,7 @@ case class OptionsRepositoryLive(dataSource: DataSource with Closeable, blocking
 
   override def all: Task[Seq[Options]] = run(OptionsQueries.optionsQuery).dependOnDataSource().provide(dataSourceLayer)
 
-  override def findById(id: Long): Task[Options] = {
+  override def findById(id: UUID): Task[Options] = {
     for {
       results <- run(OptionsQueries.byId(id)).dependOnDataSource().provide(dataSourceLayer)
       option    <- ZIO.fromOption(results.headOption).orElseFail(NotFoundException(s"Could not find option with id $id", id.toString))
@@ -81,8 +82,8 @@ object OptionsQueries {
   //implicit val optionsInsertMeta = insertMeta[Options](_.id)
 
   val optionsQuery                   = quote(query[Options])
-  def byId(id: Long)               = quote(optionsQuery.filter(_.id == lift(id)))
-  def filterByIds(ids: Seq[Long])               = quote(optionsQuery.filter(element => liftQuery(ids).contains(element.id)))
+  def byId(id: UUID)               = quote(optionsQuery.filter(_.id == lift(id)))
+  def filterByIds(ids: Seq[UUID])               = quote(optionsQuery.filter(element => liftQuery(ids).contains(element.id)))
   def byName(value: String)               = quote(optionsQuery.filter(_.value == lift(value)))
   def filter(values: Seq[FieldValue])               = quote(query[Options])
   def insertOptions(option: Options) = quote(optionsQuery.insert(lift(option)))

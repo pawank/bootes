@@ -151,6 +151,7 @@ object Models {
                                 id: UUID,
                                 tenantId: Int,
                                 requestId: Option[UUID],
+                                templateId: Option[UUID],
                                 title: String,
                                 subTitle: Option[String],
                                 sections: Seq[FormSection],
@@ -170,6 +171,7 @@ object Models {
                    id: UUID,
                    tenantId: Int,
                    requestId: Option[UUID] = None,
+                   templateId: Option[UUID] = None,
                    title: String,
                    subTitle: Option[String],
                    designProperties: Option[DesignProperties] = None,
@@ -180,7 +182,7 @@ object Models {
     implicit val codec: JsonCodec[Form] = DeriveJsonCodec.gen[Form]
 
     implicit def toCreateFormRequest(record: Form, sections: List[FormSection]): CreateFormRequest = {
-      CreateFormRequest(id = record.id, tenantId = record.tenantId, requestId = record.requestId, title = record.title,
+      CreateFormRequest(id = record.id, tenantId = record.tenantId, requestId = record.requestId, templateId = record.templateId, title = record.title,
         subTitle = record.subTitle, sections = sections, designProperties = record.designProperties, status = record.status, metadata = record.metadata)
     }
   }

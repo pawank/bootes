@@ -2,6 +2,7 @@ create table form (
                       id uuid DEFAULT uuid_generate_v4() primary key,
                       tenant_id int not null,
                       request_id uuid,
+                      template_id uuid,
                       title varchar(255) not null,
                       sub_title varchar(255),
                       width int,
@@ -13,9 +14,11 @@ create table form (
                       created_at timestamp not null,
                       updated_at timestamp,
                       created_by varchar(255) not null,
-                      updated_by varchar(255)
+                      updated_by varchar(255),
+                      constraint fk_form_template_ref_id foreign key(template_id) references form(id)
 );
-create unique index idx_tenant_title_form on form(tenant_id, title);
+create index idx_form_tenant_id_title on form(tenant_id, title);
+create index idx_form_title on form(title);
 
 create table "section" (
                       id uuid DEFAULT uuid_generate_v4() primary key,

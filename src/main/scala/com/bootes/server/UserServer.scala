@@ -7,7 +7,7 @@ import com.data2ui.FormService
 import com.data2ui.repository.{FormElementsRepository, FormRepository, FormRepositoryLive, OptionsRepository, OptionsRepositoryLive, ValidationsRepository}
 import com.data2ui.server.FormEndpoints
 import zhttp.http.{Response, _}
-import zhttp.service.Server
+import zhttp.service.{EventLoopGroup, Server}
 import zio._
 import zio.console._
 import zio.duration.durationInt
@@ -22,6 +22,7 @@ import com.github.mvv.sredded.generic.deriveStructured
 import com.github.mvv.sredded.StructuredMapping
 import com.github.mvv.sredded.generic.deriveStructured
 import com.github.mvv.zilog.{Logger => ZLogger, Logging => ZLogging}
+import zhttp.service.server.ServerChannelFactory
 import zio.config.derivation.name
 
 
@@ -84,9 +85,9 @@ object UserServer extends App {
     import sttp.client3._
     import sttp.client3.asynchttpclient.zio._
     scribe.info("Starting bootes service..")
-    Server
-      .start(8080, getVersion(root) +++ AuthenticationApp.login +++ userEndpoints +++ formEndpoints)
-      .inject(Console.live, ZioQuillContext.dataSourceLayer, OptionsRepository.layer, ValidationsRepository.layer, FormElementsRepository.layer, logLayer, Clock.live, ZLogging.consoleJson(), AsyncHttpClientZioBackend.layer(), UserService.layerKeycloakService, FormRepository.layer, FormService.layer, system.System.live)
+    val app = getVersion(root) +++ AuthenticationApp.login +++ userEndpoints +++ formEndpoints
+    val server = Server.port(8080) ++ Server.app(app) ++ Server.maxRequestSize(4194304)
+    server.start.inject(ServerChannelFactory.auto, EventLoopGroup.auto(0), Console.live, ZioQuillContext.dataSourceLayer, OptionsRepository.layer, ValidationsRepository.layer, FormElementsRepository.layer, logLayer, Clock.live, ZLogging.consoleJson(), AsyncHttpClientZioBackend.layer(), UserService.layerKeycloakService, FormRepository.layer, FormService.layer, system.System.live)
   }
 
   override def run(args: List[String]): URIO[zio.ZEnv, ExitCode] = program.exitCode

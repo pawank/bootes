@@ -19,9 +19,22 @@ case class FormRepositoryLive(dataSource: DataSource with Closeable, blocking: B
 
   import com.data2ui.repository.repository.FormContext._
 
-  def getCreateFormRequest(formTask: Task[Form]): Task[CreateFormRequest] = {
+  def applyIdChangesOnForm(form: CreateFormRequest): CreateFormRequest = {
+    val formId = UUID.randomUUID()
+    val sections = form.sections.map(s => {
+      s.copy(elements = s.elements.map(e => {
+        val eid = UUID.randomUUID()
+        e.copy(id = eid, validations = e.validations.map(_.copy(id = UUID.randomUUID(), elementId = Some(eid))), options = e.options.map(opts => opts.map(_.copy(id = UUID.randomUUID(), elementId = Some(eid)))))
+      })
+      )
+    })
+    form.copy(id = formId, sections = sections)
+  }
+
+  def getCreateFormRequest(formTask: Task[Form], isRefreshId: Boolean): Task[CreateFormRequest] = {
     val r = for {
       f <- formTask
+      newFormId = if (isRefreshId) Some(UUID.randomUUID()) else None
       fetchedElements <- {
         val id = f.id
         run(ElementQueries.getCreateElementRequestByFormId(id))
@@ -31,6 +44,7 @@ case class FormRepositoryLive(dataSource: DataSource with Closeable, blocking: B
         ZIO.effect({
           val optsValidationsMap: Map[String, (List[Validations], List[Options])] = Map.empty
           var sectionMap: Map[(String, Int), List[CreateElementRequest]] = Map.empty
+          def checkId(x: UUID, y: UUID) = x == y
           fetchedElements.map(x => {
             val optkey = x._1.sectionName.getOrElse("") + "_" + x._1.title
             val key = (x._1.sectionName.getOrElse(""), x._1.sectionSeqNo.getOrElse(0))
@@ -41,8 +55,8 @@ case class FormRepositoryLive(dataSource: DataSource with Closeable, blocking: B
                 val opts: List[Options] = ov._2 ::: x._3.map(List(_)).getOrElse(List.empty)
                 optsValidationsMap.updated(optkey, (valids, opts))
                 val datas: List[CreateElementRequest] = {
-                  val isFound = xs.exists(t => t.id == x._1.id)
-                  val tmpxs = if (isFound) xs.map(t => if (t.id == x._1.id) t.copy(options = t.options.map(tt => {tt.toList ::: opts}.distinct), validations = {t.validations.toList ::: valids}.distinct) else t) else xs ::: List(Element.toCreateElementRequest(x._1, valids, Some(opts)))
+                  val isFound = xs.exists(t => checkId(t.id, x._1.id))
+                  val tmpxs = if (isFound) xs.map(t => if (checkId(t.id, x._1.id)) t.copy(options = t.options.map(tt => {tt.toList ::: opts}.distinct), validations = {t.validations.toList ::: valids}.distinct) else t) else xs ::: List(Element.toCreateElementRequest(x._1, valids, Some(opts)))
                   tmpxs
                 }
                 sectionMap = sectionMap + (key -> datas)
@@ -60,8 +74,8 @@ case class FormRepositoryLive(dataSource: DataSource with Closeable, blocking: B
         })
       }
     } yield {
-      val cf = Form.toCreateFormRequest(f, fetchedSections.toList)
-      cf
+      val cf = Form.toCreateFormRequest(f, fetchedSections.toList, newFormId)
+      if (isRefreshId) applyIdChangesOnForm(cf) else cf
     }
     r
   }
@@ -92,17 +106,17 @@ case class FormRepositoryLive(dataSource: DataSource with Closeable, blocking: B
         } yield xs.headOption.getOrElse(throw new Exception("Insert or update failed!"))
       }.dependOnDataSource().provide(dataSourceLayer)
     }
-    getCreateFormRequest(formTask)
+    getCreateFormRequest(formTask, isRefreshId = false)
   }
 
   override def all: Task[Seq[Form]] = run(FormQueries.elementsQuery).dependOnDataSource().provide(dataSourceLayer)
 
-  override def findById(id: UUID): Task[CreateFormRequest] = {
+  override def findById(id: UUID, isRefreshId: Boolean): Task[CreateFormRequest] = {
     val formTask = for {
       results <- run(FormQueries.byId(id)).dependOnDataSource().provide(dataSourceLayer)
       element    <- ZIO.fromOption(results.headOption).orElseFail(NotFoundException(s"Could not find element with id $id", id.toString))
     } yield element
-    getCreateFormRequest(formTask)
+    getCreateFormRequest(formTask, isRefreshId)
   }
 
   override def findByTitle(name: String): Task[Seq[Form]] = {

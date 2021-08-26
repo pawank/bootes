@@ -36,6 +36,13 @@ object FormEndpoints extends RequestOps {
             )
             forms <- FormService.all
           } yield Response.jsonString(forms.toJson)
+        case Method.GET -> Root / "bootes" / "v1" / "forms" / "template" / id =>
+          for {
+            user <- {
+              println(s"Form ID = $id")
+              FormService.getTemplateForm(UUID.fromString(id))
+            }
+          } yield Response.jsonString(user.toJson)
         case Method.GET -> Root / "bootes" / "v1" / "forms" / id =>
           for {
             user <- {

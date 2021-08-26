@@ -32,7 +32,7 @@ trait FormService {
   def upsert(request: CreateFormRequest)(implicit ctx: ServiceContext): Task[CreateFormRequest]
   def all()(implicit ctx: ServiceContext): Task[Seq[Form]]
   def get(id: UUID)(implicit ctx: ServiceContext): Task[CreateFormRequest]
-  def get(code: String)(implicit ctx: ServiceContext): Task[Form]
+  def getTemplateForm(id: UUID)(implicit ctx: ServiceContext): Task[CreateFormRequest]
   def getByEmail(email: String)(implicit ctx: ServiceContext): Task[Form]
   def logout(id: String, inputRequest: LogoutRequest)(implicit ctx: ServiceContext): Task[ResponseMessage]
 }
@@ -56,13 +56,12 @@ case class FormServiceLive(repository: FormRepository, console: Console.Service)
     _     <- console.putStrLn(s"Forms: ${elements.map(_.title).mkString(",")}")
   } yield elements.sortBy(_.id)
 
-  override def get(id: UUID)(implicit ctx: ServiceContext): Task[CreateFormRequest] = repository.findById(id)
+  override def get(id: UUID)(implicit ctx: ServiceContext): Task[CreateFormRequest] = repository.findById(id, isRefreshId = true)
+  override def getTemplateForm(id: UUID)(implicit ctx: ServiceContext): Task[CreateFormRequest] = repository.findById(id, isRefreshId = false)
 
   override def update(id: UUID, request: CreateFormRequest)(implicit ctx: ServiceContext): Task[Form] =  {
     ???
   }
-
-  override def get(code: String)(implicit ctx: ServiceContext): Task[Form] = ???
 
   override def getByEmail(email: String)(implicit ctx: ServiceContext): Task[Form] = ???
 

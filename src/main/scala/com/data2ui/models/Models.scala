@@ -92,6 +92,9 @@ object Models {
                     ) extends IElement
   object Element {
     implicit val codec: JsonCodec[Element] = DeriveJsonCodec.gen[Element]
+
+    def getId() = UUID.randomUUID()
+
     def toCreateElementRequest(element: Element, valids: Seq[Validations], opts: Option[Seq[Options]]) = {
       CreateElementRequest(id = element.id, seqNo = element.seqNo, name = element.name, title = element.title, description = element.description,
         values = element.values, `type` = element.`type`, required = element.required,
@@ -181,8 +184,9 @@ object Models {
   object Form {
     implicit val codec: JsonCodec[Form] = DeriveJsonCodec.gen[Form]
 
-    implicit def toCreateFormRequest(record: Form, sections: List[FormSection]): CreateFormRequest = {
-      CreateFormRequest(id = record.id, tenantId = record.tenantId, requestId = record.requestId, templateId = record.templateId, title = record.title,
+    implicit def toCreateFormRequest(record: Form, sections: List[FormSection], newFormId: Option[UUID]): CreateFormRequest = {
+      val isRefreshId = newFormId.isDefined
+      CreateFormRequest(id = if (!isRefreshId) record.id else newFormId.getOrElse(UUID.randomUUID()), tenantId = record.tenantId, requestId = if (!isRefreshId) record.requestId else Some(UUID.randomUUID()), templateId = record.templateId, title = record.title,
         subTitle = record.subTitle, sections = sections, designProperties = record.designProperties, status = record.status, metadata = record.metadata)
     }
   }

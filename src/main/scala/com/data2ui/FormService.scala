@@ -30,6 +30,7 @@ trait FormService {
   def create(request: CreateFormRequest)(implicit ctx: ServiceContext): Task[Form]
   def update(id: UUID, request: CreateFormRequest)(implicit ctx: ServiceContext): Task[Form]
   def upsert(request: CreateFormRequest)(implicit ctx: ServiceContext): Task[CreateFormRequest]
+  def submit(request: CreateFormRequest, sectionName: String, stepNo: Int)(implicit ctx: ServiceContext): Task[CreateFormRequest]
   def all()(implicit ctx: ServiceContext): Task[Seq[Form]]
   def get(id: UUID)(implicit ctx: ServiceContext): Task[CreateFormRequest]
   def getTemplateForm(id: UUID)(implicit ctx: ServiceContext): Task[CreateFormRequest]
@@ -48,7 +49,11 @@ case class FormServiceLive(repository: FormRepository, console: Console.Service)
   }
 
   override def upsert(request: CreateFormRequest)(implicit ctx: ServiceContext): Task[CreateFormRequest] = {
-    repository.upsert(request)
+    repository.upsert(request, "", stepNo = -1)
+  }
+
+  override def submit(request: CreateFormRequest, sectionName: String, stepNo: Int)(implicit ctx: ServiceContext): Task[CreateFormRequest] = {
+    repository.upsert(request, sectionName, stepNo)
   }
 
   override def all()(implicit ctx: ServiceContext): Task[Seq[Form]] = for {

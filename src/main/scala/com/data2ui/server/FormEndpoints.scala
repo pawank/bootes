@@ -24,11 +24,11 @@ object FormEndpoints extends RequestOps {
 
 
   val form: ApiToken => Http[Has[FormService] with Console with Logging with ZLogging, HttpError, Request, UResponse] = jwtClaim => {
-    scribe.debug(s"Claim found for ${jwtClaim.name}")
+    //scribe.debug(s"Claim found for ${jwtClaim.name}")
     implicit val serviceContext: ServiceContext = ServiceContext(token = jwtClaim.access_token.getOrElse(""), requestId = UUID.fromString(jwtClaim.requestId.getOrElse("")))
     Http
       .collectM[Request] {
-        case Method.GET -> Root / "bootes" / "v1" / "forms" / "search" =>
+        case Method.GET -> Root / "columba" / "v1" / "forms" / "search" =>
           for {
             //_ <- ZIO.succeed(scribe.info("Getting list of all forms"))
             _ <- log.locally(CorrelationId(serviceContext.requestId).andThen(DebugJsonLog(serviceContext.toString)))(
@@ -36,21 +36,21 @@ object FormEndpoints extends RequestOps {
             )
             forms <- FormService.all
           } yield Response.jsonString(forms.toJson)
-        case Method.GET -> Root / "bootes" / "v1" / "forms" / "template" / id =>
+        case Method.GET -> Root / "columba" / "v1" / "forms" / "template" / id =>
           for {
             user <- {
-              println(s"Form ID = $id")
+              //println(s"Form ID = $id")
               FormService.getTemplateForm(UUID.fromString(id))
             }
           } yield Response.jsonString(user.toJson)
-        case Method.GET -> Root / "bootes" / "v1" / "forms" / id =>
+        case Method.GET -> Root / "columba" / "v1" / "forms" / id =>
           for {
             user <- {
-              println(s"Form ID = $id")
+              //println(s"Form ID = $id")
               FormService.get(UUID.fromString(id))
             }
           } yield Response.jsonString(user.toJson)
-        case req@Method.POST -> Root / "bootes" / "v1" / "forms" =>
+        case req@Method.POST -> Root / "columba" / "v1" / "forms" =>
           for {
             request <- extractBodyFromJson[CreateFormRequest](req)
             results <- {
@@ -58,10 +58,19 @@ object FormEndpoints extends RequestOps {
               FormService.upsert(orederedReq)(serviceContext.copy(requestId = request.requestId.getOrElse(serviceContext.requestId)))
             }
           } yield Response.jsonString(results.toJson)
+        case req@Method.POST -> Root / "columba" / "v1" / "forms" / sectionName / stepNo =>
+          for {
+            request <- extractBodyFromJson[CreateFormRequest](req)
+            results <- {
+              val orederedReq = request.copy(sections = request.sections.map(s => s.copy(elements = s.makeElementsOrdered())))
+              println(s"Route sectionName = $sectionName")
+              FormService.submit(orederedReq, sectionName, stepNo.toInt)(serviceContext.copy(requestId = request.requestId.getOrElse(serviceContext.requestId)))
+            }
+          } yield Response.jsonString(results.toJson)
       }
       .catchAll {
         case NotFoundException(msg, id) =>
-          Http.fail(HttpError.NotFound(Root / "bootes" / "v1" / "forms" / id.toString))
+          Http.fail(HttpError.NotFound(Root / "columba" / "v1" / "forms" / id.toString))
         case ex: Throwable =>
           Http.fail(HttpError.InternalServerError(msg = ex.getMessage, cause = None))
         case err => Http.fail(HttpError.InternalServerError(msg = err.toString))

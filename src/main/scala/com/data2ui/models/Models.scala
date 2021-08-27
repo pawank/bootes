@@ -162,7 +162,7 @@ object Models {
                                 status: Option[String],
                                 metadata: Option[Metadata] = Some(Metadata.default)
                               ) {
-    def getFormElements() = sections.zipWithIndex.map(s => s._1.elements.map(_.copy(sectionName = Some(s._1.title), sectionSeqNo = Some(s._2)))).flatten
+    def getFormElements() = sections.zipWithIndex.map(s => s._1.elements.map(_.copy(sectionName = Some(s._1.title), sectionSeqNo = Some(s._2 + 1)))).flatten
   }
   object CreateFormRequest{
     implicit val codec: JsonCodec[CreateFormRequest] = DeriveJsonCodec.gen[CreateFormRequest]

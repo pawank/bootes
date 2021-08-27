@@ -12,7 +12,7 @@ case class FieldValue(field: String, value: String)
 
 @accessible
 trait FormRepository {
-  def upsert(form: CreateFormRequest): Task[CreateFormRequest]
+  def upsert(form: CreateFormRequest, sectionName: String, stepNo: Int): Task[CreateFormRequest]
   def all: Task[Seq[Form]]
   def filter(values: Seq[FieldValue]): Task[Seq[Form]]
   def findById(id: UUID, isRefreshId: Boolean): Task[CreateFormRequest]

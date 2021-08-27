@@ -19,7 +19,7 @@ case class FormRepositoryLive(dataSource: DataSource with Closeable, blocking: B
 
   import com.data2ui.repository.repository.FormContext._
 
-  def applyIdChangesOnForm(form: CreateFormRequest): CreateFormRequest = {
+  def applyIdChangesOnForm(form: CreateFormRequest, sectionName: String, stepNo:Int): CreateFormRequest = {
     val formId = UUID.randomUUID()
     val sections = form.sections.map(s => {
       s.copy(elements = s.elements.map(e => {
@@ -31,7 +31,16 @@ case class FormRepositoryLive(dataSource: DataSource with Closeable, blocking: B
     form.copy(id = formId, sections = sections)
   }
 
-  def getCreateFormRequest(formTask: Task[Form], isRefreshId: Boolean): Task[CreateFormRequest] = {
+  def applySectionAndStepFilteringOnForm(form: CreateFormRequest, sectionName: String, stepNo:Int): CreateFormRequest = {
+    //println(s"applySectionAndStepFilteringOnForm: sectionName = $sectionName and stepNo = $stepNo")
+    //val sections = form.sections.filter(s => if (sectionName.isEmpty) true else s.title.equalsIgnoreCase(sectionName)).map(s => {
+    val sections = form.sections.map(s => {
+        s.copy(elements = s.elements.drop(if (stepNo < 0) 0 else stepNo).take(if (stepNo < 0) s.elements.size else 1))
+    })
+    form.copy(sections = sections)
+  }
+
+  def getCreateFormRequest(formTask: Task[Form], isRefreshId: Boolean, sectionName: String, stepNo: Int): Task[CreateFormRequest] = {
     val r = for {
       f <- formTask
       newFormId = if (isRefreshId) Some(UUID.randomUUID()) else None
@@ -68,27 +77,31 @@ case class FormRepositoryLive(dataSource: DataSource with Closeable, blocking: B
                 sectionMap = sectionMap + (key -> List(newElement))
             }
           })
-          val sections: Seq[FormSection] = sectionMap.keySet.toList.map(s => FormSection(s._1, Some(s._2), sectionMap.get(s).getOrElse(List.empty)))
+          val sections: Seq[FormSection] = sectionMap.keySet.toList.zipWithIndex.map(s => FormSection(s._1._1, Some(s._2 + 1), sectionMap.get(s._1).getOrElse(List.empty)))
           //println(s"Sections = $sections")
           sections
         })
       }
     } yield {
       val cf = Form.toCreateFormRequest(f, fetchedSections.toList, newFormId)
-      if (isRefreshId) applyIdChangesOnForm(cf) else cf
+      if (isRefreshId) {applyIdChangesOnForm(cf, sectionName, stepNo)} else {
+        if ((!sectionName.isEmpty) && stepNo > 0) {
+          applySectionAndStepFilteringOnForm(cf, sectionName, stepNo)
+        } else cf
+      }
     }
     r
   }
 
-  override def upsert(form: CreateFormRequest): Task[CreateFormRequest] = {
+  override def upsert(form: CreateFormRequest, sectionName: String, stepNo: Int = -1): Task[CreateFormRequest] = {
     val dbForm = CreateFormRequest.toForm(form)
-    println(s"Form to be inserted or updated = $dbForm")
+    //println(s"Form to be inserted or updated = $dbForm")
     val formTask = {
       transaction {
         for {
           id     <- run(FormQueries.upsert(dbForm))
           requestedElements = form.getFormElements()
-          elements: Seq[Element] = requestedElements.map(CreateElementRequest.toElement(_)).zipWithIndex.map(e => e._1.copy(seqNo = Option(e._2), formId = Some(id)))
+          elements: Seq[Element] = requestedElements.map(CreateElementRequest.toElement(_)).zipWithIndex.map(e => e._1.copy(seqNo = Option(e._2 + 1), formId = Some(id)))
           savedElements <- {
             run(ElementQueries.batchUpsert(elements))
           }
@@ -97,7 +110,7 @@ case class FormRepositoryLive(dataSource: DataSource with Closeable, blocking: B
             run(ValidationsQueries.batchUpsert(xs.values.toSeq.flatten))
           }
           savedOpts <- {
-            val options: Map[UUID, Seq[Options]] = requestedElements.groupBy(_.id).map(v => (v._1, v._2.map(_.options.getOrElse(Seq.empty)).flatten.zipWithIndex.map(x => x._1.copy(seqNo = Some(x._2), elementId = Some(v._1)))))
+            val options: Map[UUID, Seq[Options]] = requestedElements.groupBy(_.id).map(v => (v._1, v._2.map(_.options.getOrElse(Seq.empty)).flatten.zipWithIndex.map(x => x._1.copy(seqNo = Some(x._2 + 1), elementId = Some(v._1)))))
             run(OptionsQueries.batchUpsert(options.values.toSeq.flatten))
           }
           xs <- {
@@ -106,7 +119,7 @@ case class FormRepositoryLive(dataSource: DataSource with Closeable, blocking: B
         } yield xs.headOption.getOrElse(throw new Exception("Insert or update failed!"))
       }.dependOnDataSource().provide(dataSourceLayer)
     }
-    getCreateFormRequest(formTask, isRefreshId = false)
+    getCreateFormRequest(formTask, isRefreshId = false, sectionName, stepNo)
   }
 
   override def all: Task[Seq[Form]] = run(FormQueries.elementsQuery).dependOnDataSource().provide(dataSourceLayer)
@@ -116,7 +129,7 @@ case class FormRepositoryLive(dataSource: DataSource with Closeable, blocking: B
       results <- run(FormQueries.byId(id)).dependOnDataSource().provide(dataSourceLayer)
       element    <- ZIO.fromOption(results.headOption).orElseFail(NotFoundException(s"Could not find element with id $id", id.toString))
     } yield element
-    getCreateFormRequest(formTask, isRefreshId)
+    getCreateFormRequest(formTask, isRefreshId, sectionName = "", stepNo = -1)
   }
 
   override def findByTitle(name: String): Task[Seq[Form]] = {

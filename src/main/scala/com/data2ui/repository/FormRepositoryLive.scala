@@ -106,7 +106,7 @@ case class FormRepositoryLive(dataSource: DataSource with Closeable, blocking: B
   }
 
   override def upsert(form: CreateFormRequest, sectionName: String, stepNo: Int = -1): Task[CreateFormRequest] = {
-    val dbForm = CreateFormRequest.toForm(form)
+    val dbForm = CreateFormRequest.toForm(form, if (stepNo <= 0) Some("created") else form.status)
     //println(s"Form to be inserted or updated = $dbForm")
     val formTask = {
       transaction {

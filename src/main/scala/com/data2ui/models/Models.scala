@@ -168,7 +168,9 @@ object Models {
   object CreateFormRequest{
     implicit val codec: JsonCodec[CreateFormRequest] = DeriveJsonCodec.gen[CreateFormRequest]
 
-    implicit def toForm(record: CreateFormRequest): Form = record.into[Form].transform.copy(id = record.id, metadata = record.metadata)
+    implicit def toForm(record: CreateFormRequest, status: Option[String]): Form = {
+      record.into[Form].transform.copy(id = record.id, metadata = record.metadata).copy(status = status)
+    }
   }
 
   case class Form(
@@ -189,7 +191,7 @@ object Models {
 
     implicit def toCreateFormRequest(record: Form, sections: List[FormSection], newFormId: Option[UUID]): CreateFormRequest = {
       val isRefreshId = newFormId.isDefined
-      CreateFormRequest(id = if (!isRefreshId) record.id else newFormId.getOrElse(UUID.randomUUID()), tenantId = record.tenantId, requestId = if (!isRefreshId) record.requestId else Some(UUID.randomUUID()), templateId = record.templateId, title = record.title,
+      CreateFormRequest(id = if (!isRefreshId) record.id else newFormId.getOrElse(UUID.randomUUID()), tenantId = record.tenantId, requestId = if (!isRefreshId) record.requestId else Some(UUID.randomUUID()), templateId = if (isRefreshId) Some(record.id) else record.templateId, title = record.title,
         subTitle = record.subTitle, sections = sections, designProperties = record.designProperties, status = record.status, formJson = record.formJson, metadata = record.metadata)
     }
   }

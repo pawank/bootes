@@ -11,6 +11,7 @@ create table form (
                       text_color varchar(50),
                       font_family varchar(50),
                       status varchar(255),
+                      form_json text,
                       created_at timestamp not null,
                       updated_at timestamp,
                       created_by varchar(255) not null,

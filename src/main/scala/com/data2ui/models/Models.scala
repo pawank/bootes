@@ -3,7 +3,7 @@ package com.data2ui.models
 import com.bootes.dao.{CreateUserRequest, Metadata, User}
 import io.getquill.Embedded
 import io.scalaland.chimney.dsl.TransformerOps
-import zio.json.{DeriveJsonCodec, JsonCodec, JsonDecoder, JsonEncoder}
+import zio.json.{DeriveJsonCodec, EncoderOps, JsonCodec, JsonDecoder, JsonEncoder}
 import zio.macros.accessible
 import zio.prelude.{SubtypeSmart, Validation}
 import zio.test.Assertion
@@ -160,6 +160,7 @@ object Models {
                                 sections: Seq[FormSection],
                                 designProperties: Option[DesignProperties],
                                 status: Option[String],
+                                formJson: Option[String] = None,
                                 metadata: Option[Metadata] = Some(Metadata.default)
                               ) {
     def getFormElements() = sections.zipWithIndex.map(s => s._1.elements.map(_.copy(sectionName = Some(s._1.title), sectionSeqNo = Some(s._2 + 1)))).flatten
@@ -179,15 +180,17 @@ object Models {
                    subTitle: Option[String],
                    designProperties: Option[DesignProperties] = None,
                    status: Option[String] = None,
+                   formJson: Option[String] = None,
                    metadata: Option[Metadata] = None
-                 )
+                 ) {
+  }
   object Form {
     implicit val codec: JsonCodec[Form] = DeriveJsonCodec.gen[Form]
 
     implicit def toCreateFormRequest(record: Form, sections: List[FormSection], newFormId: Option[UUID]): CreateFormRequest = {
       val isRefreshId = newFormId.isDefined
       CreateFormRequest(id = if (!isRefreshId) record.id else newFormId.getOrElse(UUID.randomUUID()), tenantId = record.tenantId, requestId = if (!isRefreshId) record.requestId else Some(UUID.randomUUID()), templateId = record.templateId, title = record.title,
-        subTitle = record.subTitle, sections = sections, designProperties = record.designProperties, status = record.status, metadata = record.metadata)
+        subTitle = record.subTitle, sections = sections, designProperties = record.designProperties, status = record.status, formJson = record.formJson, metadata = record.metadata)
     }
   }
 

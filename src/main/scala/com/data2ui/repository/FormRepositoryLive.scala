@@ -1,5 +1,6 @@
 package com.data2ui.repository
 
+import com.bootes.dao.Metadata
 import com.data2ui.models.Models.{CreateElementRequest, CreateFormRequest, Element, Form, FormSection, Options, Validations}
 import com.data2ui.repository.ElementQueries.elementsQuery
 import com.data2ui.repository.FormRepository
@@ -7,6 +8,7 @@ import com.data2ui.repository.repository.NotFoundException
 import io.getquill.context.ZioJdbc.QuillZioExt
 import zio._
 import zio.blocking.Blocking
+import zio.json.EncoderOps
 
 import java.io.Closeable
 import java.util.UUID
@@ -35,9 +37,10 @@ case class FormRepositoryLive(dataSource: DataSource with Closeable, blocking: B
     //println(s"applySectionAndStepFilteringOnForm: sectionName = $sectionName and stepNo = $stepNo")
     //val sections = form.sections.filter(s => if (sectionName.isEmpty) true else s.title.equalsIgnoreCase(sectionName)).map(s => {
     val sections = form.sections.map(s => {
-        s.copy(elements = s.elements.drop(if (stepNo < 0) 0 else stepNo).take(if (stepNo < 0) s.elements.size else 1))
+        s.copy(elements = s.elements.filter(e => e.seqNo.getOrElse(0) == stepNo))
+      //s.copy(elements = s.elements.drop(if (stepNo < 0) 0 else stepNo).take(if (stepNo < 0) s.elements.size else 1))
     })
-    form.copy(sections = sections)
+    form.copy(sections = sections.filter(s => !s.elements.isEmpty))
   }
 
   def getCreateFormRequest(formTask: Task[Form], isRefreshId: Boolean, sectionName: String, stepNo: Int): Task[CreateFormRequest] = {
@@ -85,12 +88,21 @@ case class FormRepositoryLive(dataSource: DataSource with Closeable, blocking: B
     } yield {
       val cf = Form.toCreateFormRequest(f, fetchedSections.toList, newFormId)
       if (isRefreshId) {applyIdChangesOnForm(cf, sectionName, stepNo)} else {
-        if ((!sectionName.isEmpty) && stepNo > 0) {
+        if (stepNo > 0) {
           applySectionAndStepFilteringOnForm(cf, sectionName, stepNo)
         } else cf
       }
     }
-    r
+    isRefreshId match {
+      case true =>
+        val finalForm = for {
+          form <- r
+          savedForm <- upsert(form.copy(formJson = Some(form.toJson), status = Some("pending"), metadata = form.metadata.map(m => m.copy(createdAt = Metadata.default.createdAt, updatedAt = None))), sectionName = "", stepNo = -1)
+        } yield savedForm.copy(formJson = None)
+        finalForm
+      case _ =>
+        r.map(_.copy(formJson = None))
+    }
   }
 
   override def upsert(form: CreateFormRequest, sectionName: String, stepNo: Int = -1): Task[CreateFormRequest] = {
@@ -119,7 +131,7 @@ case class FormRepositoryLive(dataSource: DataSource with Closeable, blocking: B
         } yield xs.headOption.getOrElse(throw new Exception("Insert or update failed!"))
       }.dependOnDataSource().provide(dataSourceLayer)
     }
-    getCreateFormRequest(formTask, isRefreshId = false, sectionName, stepNo)
+    getCreateFormRequest(formTask, isRefreshId = false, sectionName, stepNo + 1)
   }
 
   override def all: Task[Seq[Form]] = run(FormQueries.elementsQuery).dependOnDataSource().provide(dataSourceLayer)
@@ -129,7 +141,7 @@ case class FormRepositoryLive(dataSource: DataSource with Closeable, blocking: B
       results <- run(FormQueries.byId(id)).dependOnDataSource().provide(dataSourceLayer)
       element    <- ZIO.fromOption(results.headOption).orElseFail(NotFoundException(s"Could not find element with id $id", id.toString))
     } yield element
-    getCreateFormRequest(formTask, isRefreshId, sectionName = "", stepNo = -1)
+    getCreateFormRequest(formTask, isRefreshId, sectionName = "", stepNo = 0)
   }
 
   override def findByTitle(name: String): Task[Seq[Form]] = {

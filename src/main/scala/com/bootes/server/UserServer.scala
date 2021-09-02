@@ -85,7 +85,7 @@ object UserServer extends App {
     import sttp.client3._
     import sttp.client3.asynchttpclient.zio._
     scribe.info("Starting bootes service..")
-    val app = getVersion(root) +++ AuthenticationApp.login +++ userEndpoints +++ formEndpoints
+    val app = CORS(getVersion(root) +++ AuthenticationApp.login, config = CORSConfig(anyOrigin = true)) +++ userEndpoints +++ formEndpoints
     val server = Server.port(8080) ++ Server.app(app) ++ Server.maxRequestSize(4194304)
     server.start.inject(ServerChannelFactory.auto, EventLoopGroup.auto(0), Console.live, ZioQuillContext.dataSourceLayer, OptionsRepository.layer, ValidationsRepository.layer, FormElementsRepository.layer, logLayer, Clock.live, ZLogging.consoleJson(), AsyncHttpClientZioBackend.layer(), UserService.layerKeycloakService, FormRepository.layer, FormService.layer, system.System.live)
   }

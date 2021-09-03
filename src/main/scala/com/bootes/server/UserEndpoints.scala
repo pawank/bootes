@@ -67,6 +67,9 @@ trait RequestOps {
   def extractBodyFromJson[A](request: Request)(implicit codec: JsonCodec[A]): IO[Serializable, A] =
     for {
       requestOrError <- ZIO.fromOption(request.getBodyAsString.map(_.fromJson[A]))
-      body           <- ZIO.fromEither(requestOrError)
+      body           <- {
+        println(requestOrError)
+        ZIO.fromEither(requestOrError)
+      }
     } yield body
 }

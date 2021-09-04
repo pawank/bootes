@@ -1,5 +1,5 @@
 create table "user" (
-                      id serial primary key,
+                      id uuid DEFAULT uuid_generate_v4() primary key,
                       "type" varchar(50) not null,
                       code varchar(32) not null,
                       first_name varchar(255) not null,
@@ -38,7 +38,7 @@ create unique index idx_user_email1 on "user" (email1);
 create unique index idx_user_pancard on "user" (pancard);
 
 create table address (
-                      id serial primary key,
+                      id uuid DEFAULT uuid_generate_v4() primary key,
                       house_no varchar(255) not null,
                       street varchar(255),
                       pincode varchar(255),
@@ -52,7 +52,7 @@ create table address (
                       updated_at timestamp,
                       created_by varchar(255) not null,
                       updated_by varchar(255),
-                      user_id integer,
+                      user_id uuid,
                       constraint fk_user_id foreign key(user_id) references "user"(id)
 );
 create index idx_address_user on address (id, user_id);

@@ -5,6 +5,8 @@ import io.getquill.context.ZioJdbc.QDataSource
 import zio._
 import zio.macros.accessible
 
+import java.util.UUID
+
 
 case class FieldValue(field: String, value: String)
 
@@ -14,7 +16,7 @@ trait UserRepository {
   def update(user: User): Task[User]
   def all: Task[Seq[User]]
   def filter(values: Seq[FieldValue]): Task[Seq[User]]
-  def findById(id: Long): Task[User]
+  def findById(id: UUID): Task[User]
   def findByCode(code: String): Task[User]
   def findByEmail(email: String): Task[User]
 }

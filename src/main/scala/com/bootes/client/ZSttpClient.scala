@@ -119,6 +119,8 @@ trait HttpClient {
               r.body match {
                 case Right(data) =>
                   val xs = data.fromJson[List[U]]
+                  println(data)
+                  println(s"Keycloak Users: $xs")
                   log.locally(CorrelationId(serviceContext.requestId).andThen(DebugJsonLog(if (xs.isLeft) xs.left.toOption.getOrElse("Error in getting error projection of the response") else "JSON prepared from the collection response")))(
                     log.debug(s"${r.code} Received response for $url")
                   ) &> {

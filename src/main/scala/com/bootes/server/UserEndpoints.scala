@@ -36,7 +36,7 @@ object UserEndpoints extends RequestOps {
           } yield Response.jsonString(users.toJson)
         case Method.GET -> Root / "bootes" / "v1" / "users" / id =>
           for {
-            user <- UserService.get(id.toInt)
+            user <- UserService.get(UUID.fromString(id))
           } yield Response.jsonString(user.toJson)
         case req@Method.POST -> Root / "bootes" / "v1" / "users" =>
           for {

@@ -23,6 +23,7 @@ import zio.logging.{LogAnnotation, Logging, log}
 import zio.prelude.Validation
 
 import java.time.{Instant, LocalDateTime, ZoneId, ZonedDateTime}
+import java.util.UUID
 import scala.language.implicitConversions
 
 case class PrimaryAddress(houseNo: String, street: Option[String] = None, pincode: Option[String] = None,
@@ -100,24 +101,25 @@ object Attribute {
 
 
 case class User(
-  id: Long = -1,
-  `type`: String,
-  code: String,
-  name: Name,
-  contactMethod: Option[ContactMethod] = None,
-  vector: Option[VectorInfo] = None,
-  gender: Option[String] = None,
-  dateOfBirth: Option[java.time.LocalDate] = None,
-  placeOfBirth: Option[String] = None,
-  primaryAddress: Option[PrimaryAddress] = None,
-  //legalEntity: LegalEntity,
-  roles: List[String] = List.empty,
-  scopes: List[String] = List.empty,
-  status: String = "active",
-  metadata: Option[Metadata] = None
+                 id: Option[UUID],
+                 `type`: String,
+                 code: String,
+                 name: Name,
+                 contactMethod: Option[ContactMethod] = None,
+                 vector: Option[VectorInfo] = None,
+                 gender: Option[String] = None,
+                 dateOfBirth: Option[java.time.LocalDate] = None,
+                 placeOfBirth: Option[String] = None,
+                 primaryAddress: Option[PrimaryAddress] = None,
+                 //legalEntity: LegalEntity,
+                 roles: List[String] = List.empty,
+                 scopes: List[String] = List.empty,
+                 status: String = "active",
+                 metadata: Option[Metadata] = None
   )
 
 case class CreateUserRequest (
+                 id: Option[UUID] = None,
                  requestId: Option[String] = None,
                  `type`: String,
                  code: String,
@@ -132,7 +134,8 @@ case class CreateUserRequest (
                  //attributes: JSONB = JSONB.apply(String.valueOf("{}").getBytes()),
                  roles: List[String] = List.empty,
                  scopes: List[String] = List.empty,
-                 status: String = "active"
+                 status: String = "active",
+                   metadata: Option[Metadata] = None
                )
 object CreateUserRequest {
   implicit val codec: JsonCodec[CreateUserRequest] = DeriveJsonCodec.gen[CreateUserRequest]
@@ -156,10 +159,21 @@ object User {
   implicit def fromSeqUserRecord(records: Seq[CreateUserRequest]): Seq[User] = records.map(fromUserRecord)
   implicit val codec: JsonCodec[User]                                 = DeriveJsonCodec.gen[User]
 
-  val sample = User(`type` = "real", code = "1", name = Name(firstName = "Pawan", lastName = "Kumar"), status = "active", metadata = Some(Metadata.default))
+  val sample = User(id = None, `type` = "real", code = "1", name = Name(firstName = "Pawan", lastName = "Kumar"), status = "active", metadata = Some(Metadata.default))
 
   implicit def fromKeycloakUser(keycloakUser: KeycloakUser): User = {
-    User(id = -1, `type` = "real", code = keycloakUser.username, name = Name(firstName = keycloakUser.firstName, lastName = keycloakUser.lastName), contactMethod = Some(ContactMethod(email1 = keycloakUser.email)),
+    val phone1xs: Seq[String] = keycloakUser.attributes.map(_.phone.getOrElse(Seq.empty)).getOrElse(Seq.empty)
+    val phone1 = if (phone1xs.isEmpty) None else phone1xs.headOption
+    User(id = keycloakUser.id.map(UUID.fromString(_)), `type` = "real", code = keycloakUser.username, name = Name(firstName = keycloakUser.firstName, lastName = keycloakUser.lastName), contactMethod = Some(ContactMethod(email1 = keycloakUser.email, phone1 = phone1)),
+      status = if (keycloakUser.enabled) "active" else "inactive",
+      metadata = Some(Metadata.default)
+    )
+  }
+
+  implicit def fromKeycloakCreateUserRequest(keycloakUser: KeycloakUser): CreateUserRequest = {
+    val phone1xs: Seq[String] = keycloakUser.attributes.map(_.phone.getOrElse(Seq.empty)).getOrElse(Seq.empty)
+    val phone1 = if (phone1xs.isEmpty) None else phone1xs.headOption
+    CreateUserRequest(id = keycloakUser.id.map(UUID.fromString(_)), `type` = "real", code = keycloakUser.username, name = Name(firstName = keycloakUser.firstName, lastName = keycloakUser.lastName), contactMethod = Some(ContactMethod(email1 = keycloakUser.email, phone1 = phone1)),
       status = if (keycloakUser.enabled) "active" else "inactive", metadata = Some(Metadata.default)
     )
   }
@@ -169,9 +183,9 @@ object User {
 trait UserService {
   def create(request: CreateUserRequest)(implicit ctx: ServiceContext): Task[User]
   def upsert(request: CreateUserRequest)(implicit ctx: ServiceContext): ZIO[Any, Serializable, User]
-  def update(id: Long, request: CreateUserRequest)(implicit ctx: ServiceContext): Task[User]
+  def update(id: UUID, request: CreateUserRequest)(implicit ctx: ServiceContext): Task[User]
   def all()(implicit ctx: ServiceContext): Task[Seq[User]]
-  def get(id: Long)(implicit ctx: ServiceContext): Task[User]
+  def get(id: UUID)(implicit ctx: ServiceContext): Task[User]
   def get(code: String)(implicit ctx: ServiceContext): Task[User]
   def getByEmail(email: String)(implicit ctx: ServiceContext): Task[User]
   def logout(id: String, inputRequest: LogoutRequest)(implicit ctx: ServiceContext): Task[ResponseMessage]
@@ -196,10 +210,10 @@ case class UserServiceLive(repository: UserRepository, console: Console.Service)
     _     <- console.putStrLn(s"Users: ${users.map(_.code).mkString(",")}")
   } yield users.sortBy(_.id)
 
-  override def get(id: Long)(implicit ctx: ServiceContext): Task[User] = repository.findById(id)
+  override def get(id: UUID)(implicit ctx: ServiceContext): Task[User] = repository.findById(id)
 
-  override def update(id: Long, request: CreateUserRequest)(implicit ctx: ServiceContext): Task[User] =  {
-    repository.update(User.fromUserRecord(request).copy(id = id))
+  override def update(id: UUID, request: CreateUserRequest)(implicit ctx: ServiceContext): Task[User] =  {
+    repository.update(User.fromUserRecord(request).copy(id = Some(id)))
   }
 
   override def get(code: String)(implicit ctx: ServiceContext): Task[User] = repository.findByCode(code)
@@ -290,9 +304,9 @@ case class KeycloakUserServiceLive(console: Console.Service) extends UserService
       .provideLayer(AsyncHttpClientZioBackend.layer() ++ Clock.live ++ UserServer.logLayer ++ system.System.live)
   }
 
-  override def get(id: Long)(implicit ctx: ServiceContext): Task[User] = ZIO.effect(User.sample)
+  override def get(id: UUID)(implicit ctx: ServiceContext): Task[User] = ZIO.effect(User.sample)
 
-  override def update(id: Long, request: CreateUserRequest)(implicit ctx: ServiceContext): Task[User] =  {
+  override def update(id: UUID, request: CreateUserRequest)(implicit ctx: ServiceContext): Task[User] =  {
     ZIO.effect(User.sample)
   }
 

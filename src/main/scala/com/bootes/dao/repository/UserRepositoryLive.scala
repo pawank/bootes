@@ -7,6 +7,7 @@ import zio._
 import zio.blocking.Blocking
 
 import java.io.Closeable
+import java.util.UUID
 import javax.sql.DataSource
 
 case class UserRepositoryLive(dataSource: DataSource with Closeable, blocking: Blocking.Service) extends UserRepository {
@@ -18,14 +19,14 @@ case class UserRepositoryLive(dataSource: DataSource with Closeable, blocking: B
     for {
       id     <- run(UserQueries.insertUser(user).returning(_.id))
       users <- {
-        run(UserQueries.byId(id))
+        run(UserQueries.byId(id.getOrElse(UUID.randomUUID())))
       }
     } yield users.headOption.getOrElse(throw new Exception("Insert failed!"))
   }.dependOnDataSource().provide(dataSourceLayer)
 
   override def all: Task[Seq[User]] = run(UserQueries.usersQuery).dependOnDataSource().provide(dataSourceLayer)
 
-  override def findById(id: Long): Task[User] = {
+  override def findById(id: UUID): Task[User] = {
     for {
       results <- run(UserQueries.byId(id)).dependOnDataSource().provide(dataSourceLayer)
       user    <- ZIO.fromOption(results.headOption).orElseFail(NotFoundException(s"Could not find user with id $id", id.toString))
@@ -56,7 +57,7 @@ case class UserRepositoryLive(dataSource: DataSource with Closeable, blocking: B
   override def update(user: User): Task[User] = transaction {
     for {
       _     <- run(UserQueries.upsertUser(user))
-      users <- run(UserQueries.byId(user.id))
+      users <- run(UserQueries.byId(user.id.getOrElse(UUID.randomUUID())))
     } yield users.headOption.getOrElse(throw new Exception("Update failed!"))
   }.dependOnDataSource().provide(dataSourceLayer)
 }
@@ -70,7 +71,7 @@ object UserQueries {
   implicit val userInsertMeta = insertMeta[User](_.id)
 
   val usersQuery                   = quote(query[User])
-  def byId(id: Long)               = quote(usersQuery.filter(_.id == lift(id)))
+  def byId(id: UUID)               = quote(usersQuery.filter(_.id == lift(Some(id): Option[UUID])))
   def byCode(code: String)               = quote(usersQuery.filter(_.code == lift(code)))
   def byEmail(email: String)               = quote(usersQuery.filter(_.contactMethod.map(_.email1).flatten == lift(Some(email):Option[String])))
   def filter(values: Seq[FieldValue])               = quote(query[User])

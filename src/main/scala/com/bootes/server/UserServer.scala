@@ -72,13 +72,13 @@ object UserServer extends App {
   val userEndpoints: Http[Has[UserService] with Clock with Console with Logging with ZLogging with system.System, HttpError, Request, Response[Has[UserService]  with Console with Logging with ZLogging, HttpError]] =
     CORS(
       AuthenticationApp.authenticate(HttpApp.forbidden("None shall pass."), UserEndpoints.user),
-      config = CORSConfig(anyOrigin = true, anyMethod = true)
+      config = getCorsConfig()
     )
 
   val formEndpoints: Http[Has[FormService] with Clock with Console with Logging with ZLogging with system.System, HttpError, Request, Response[Has[FormService] with Console with Logging with ZLogging, HttpError]] =
     CORS(
         AuthenticationApp.authenticate(HttpApp.forbidden("None shall pass."), FormEndpoints.form),
-      config = CORSConfig(anyOrigin = true, anyMethod = true)
+      config = getCorsConfig()
     )
 
   def checkAndAllowedOrigins(origin: String): Boolean = origin.equalsIgnoreCase("*")

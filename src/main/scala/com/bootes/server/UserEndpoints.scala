@@ -1,6 +1,6 @@
 package com.bootes.server
 
-import com.bootes.dao.keycloak.Models.{RequestParsingError, ServiceContext, UserAlreadyExists}
+import com.bootes.dao.keycloak.Models.{KeyValue, QueryParams, RequestParsingError, ServiceContext, UserAlreadyExists}
 import com.bootes.dao.repository.NotFoundException
 import com.bootes.dao.{CreateUserRequest, ResponseMessage, UserService}
 import com.bootes.dao.{CreateUserRequest, UserService}
@@ -26,13 +26,21 @@ object UserEndpoints extends RequestOps {
     implicit val serviceContext: ServiceContext = ServiceContext(token = jwtClaim.access_token.getOrElse(""), requestId = UUID.fromString(jwtClaim.requestId.getOrElse("")))
     Http
       .collectM[Request] {
-        case Method.GET -> Root / "bootes" / "v1" / "users" =>
+        case req @ Method.GET -> Root / "bootes" / "v1" / "users" =>
           for {
             //_ <- ZIO.succeed(scribe.info("Getting list of all users"))
             _ <- log.locally(CorrelationId(serviceContext.requestId).andThen(DebugJsonLog(serviceContext.toString)))(
               log.debug("Calling user service for fetching all users matching with criteria")
             )
-            users <- UserService.all
+            request <- {
+              ZIO.effect({
+                val params = req.url.queryParams
+                QueryParams(params.keySet.map(key => KeyValue(key, params.get(key).getOrElse(List.empty).head)))
+              })
+            }
+            users <- {
+              UserService.all(if (request.isFound) Some(request) else None)
+            }
           } yield Response.jsonString(users.toJson)
         case Method.GET -> Root / "bootes" / "v1" / "users" / id =>
           for {

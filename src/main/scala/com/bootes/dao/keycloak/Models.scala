@@ -1,5 +1,6 @@
 package com.bootes.dao.keycloak
 
+import sttp.client3.UriContext
 import zio.console.Console
 import zio.json.{DeriveJsonCodec, JsonCodec, JsonDecoder, JsonEncoder}
 import zio.macros.accessible
@@ -110,6 +111,10 @@ object Models {
     implicit val codec: JsonCodec[KeycloakUser] = DeriveJsonCodec.gen[KeycloakUser]
   }
 
+  case class KeycloakUsers(users: Seq[KeycloakUser], count: Option[Int] = None)
+  object KeycloakUsers {
+    implicit val codec: JsonCodec[KeycloakUsers] = DeriveJsonCodec.gen[KeycloakUsers]
+  }
 
   sealed trait ApiResponseMessage
 
@@ -121,6 +126,32 @@ object Models {
   case class ApiResponseSuccess(code: Option[String] = None, message: String) extends ApiResponseMessage
   object ApiResponseSuccess{
     implicit val codec: JsonCodec[ApiResponseSuccess] = DeriveJsonCodec.gen[ApiResponseSuccess]
+  }
+
+  case class KeyValue(key: String, value: String)
+  object KeyValue{
+    implicit val codec: JsonCodec[KeyValue] = DeriveJsonCodec.gen[KeyValue]
+  }
+
+  case class QueryParams(params: Set[KeyValue]) {
+    val isFound = !params.isEmpty
+  }
+  object QueryParams{
+    implicit val codec: JsonCodec[QueryParams] = DeriveJsonCodec.gen[QueryParams]
+    def makeQueryString(params: Option[QueryParams], withQuestionMark: Boolean = true) = {
+      val qs = params match {
+        case Some(kv) => kv.params.map(x => s"${x.key}=${x.value}").mkString("&")
+        case _ => ""
+      }
+      if (withQuestionMark) s"?$qs" else qs
+    }
+    def makeUri(params: Option[QueryParams], withQuestionMark: Boolean = true) = {
+      val qs = params match {
+        case Some(kv) => kv.params.map(x => uri"${x.key}=${x.value}").mkString("&")
+        case _ => ""
+      }
+      if (withQuestionMark) s"?$qs" else qs
+    }
   }
 
   case class ServiceContext(token: String, requestId: UUID, readTimeout: FiniteDuration = 30.seconds, connectTimeout: FiniteDuration = 5.seconds) {

@@ -2,13 +2,15 @@ package com.bootes.client
 
 import com.bootes.client.ZSttpClient.getRateLimiter
 import com.bootes.config.Configuration.keycloakConfigValue
-import com.bootes.dao.keycloak.Models.{ApiResponseError, ApiResponseSuccess, KeycloakUser, ServiceContext}
+import com.bootes.dao.keycloak.Models.{ApiResponseError, ApiResponseSuccess, KeycloakUser, QueryParams, ServiceContext}
 import com.bootes.server.UserServer.{CorrelationId, DebugJsonLog, logEnv}
 import com.bootes.server.auth.{ApiLoginRequest, ApiToken, LoginRequest}
 import nl.vroste.rezilience.RateLimiter
 import sttp.client3.{Response, basicRequest}
 import sttp.client3.asynchttpclient.zio.{SttpClient, send}
 import sttp.client3.{SttpBackend, basicRequest}
+import sttp.model.Uri.QuerySegment
+import sttp.model.{Uri, UriInterpolator}
 import zhttp.core.ByteBuf
 import zhttp.http.HttpData.CompleteData
 import zhttp.http._
@@ -33,7 +35,7 @@ object NoContent {
 
 
 trait HttpClient {
-  def get[T <: (Product with Serializable), U <: (Product with Serializable)](url: String, inputRequest: T, successType: Class[U], formType: FormType = FormUsingJson)(implicit serviceContext: ServiceContext, encoder: JsonEncoder[T], decoder: JsonDecoder[U], printRecordsNo: Int = 1): ZIO[SttpClient with Logging, Serializable, Either[String, U]] = {
+  def get[T <: (Product with Serializable), U <: (Product with Serializable)](url: String, inputRequest: T, successType: Class[U], formType: FormType = FormUsingJson, queryParams: Option[QueryParams] = None)(implicit serviceContext: ServiceContext, encoder: JsonEncoder[T], decoder: JsonDecoder[U], printRecordsNo: Int = 1): ZIO[SttpClient with Logging, Serializable, Either[String, U]] = {
     for {
       _ <- log.locally(CorrelationId(serviceContext.requestId).andThen(DebugJsonLog(serviceContext.toString)))(
         log.debug(s"GET: $url")
@@ -42,14 +44,17 @@ trait HttpClient {
         import sttp.client3._
         import scala.concurrent.duration._
         val payload = inputRequest.toJson
+        val uri = uri"${url}?${QueryParams.makeUri(queryParams, false)}"
         log.locally(CorrelationId(serviceContext.requestId).andThen(DebugJsonLog(payload)))(
-          log.debug(s"GET $url")
+          log.debug(s"GET $url and uri = $uri")
         )
         val req = serviceContext.token match {
-          case "" =>
-            basicRequest.get(uri"$url").readTimeout(serviceContext.readTimeout)
-          case _ =>
-            basicRequest.auth.bearer(serviceContext.token).get(uri"$url").readTimeout(serviceContext.readTimeout)
+          case "" => {
+            basicRequest.get(uri).readTimeout(serviceContext.readTimeout)
+          }
+          case _ => {
+            basicRequest.auth.bearer(serviceContext.token).get(uri).readTimeout(serviceContext.readTimeout)
+          }
         }
         send(req)
       }
@@ -60,6 +65,7 @@ trait HttpClient {
             case true =>
               r.body match {
                 case Right(data) =>
+                  println(s"GET data = $data")
                   val xs = data.fromJson[U]
                   log.locally(CorrelationId(serviceContext.requestId).andThen(DebugJsonLog(if (xs.isLeft) xs.left.toOption.getOrElse("Error in getting error projection of the response") else "JSON fetched and prepared from the response")))(
                     log.debug(s"${r.code} Received response for $url")
@@ -119,8 +125,6 @@ trait HttpClient {
               r.body match {
                 case Right(data) =>
                   val xs = data.fromJson[List[U]]
-                  println(data)
-                  println(s"Keycloak Users: $xs")
                   log.locally(CorrelationId(serviceContext.requestId).andThen(DebugJsonLog(if (xs.isLeft) xs.left.toOption.getOrElse("Error in getting error projection of the response") else "JSON prepared from the collection response")))(
                     log.debug(s"${r.code} Received response for $url")
                   ) &> {
@@ -167,6 +171,7 @@ trait HttpClient {
             val req = formType match {
               case FormUrlEncoded =>
                 val payload = com.bootes.utils.getCCParams(inputRequest)
+                //println(s"payload = $payload")
                 log.locally(CorrelationId(serviceContext.requestId).andThen(DebugJsonLog(payload.mkString)))(
                   log.debug(s"POST $url as $formType")
                 )
@@ -178,6 +183,7 @@ trait HttpClient {
                 }
               case FormUsingJson =>
                 val payload = inputRequest.toJson
+                //println(s"JSON payload = $payload")
                 log.locally(CorrelationId(serviceContext.requestId).andThen(DebugJsonLog(payload)))(
                   log.debug(s"POST $url as $formType")
                 )

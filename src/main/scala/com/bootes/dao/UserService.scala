@@ -2,7 +2,7 @@ package com.bootes.dao
 
 import com.bootes.client.{FormUrlEncoded, FormUsingJson, NoContent, ZSttpClient}
 import com.bootes.config.Configuration.{KeycloakConfig, keycloakConfigDescription, keycloakConfigLayer, keycloakConfigValue}
-import com.bootes.dao.keycloak.Models.{ApiResponseError, ApiResponseSuccess, Attributes, CredentialRepresentation, Email, KeycloakUser, Phone, ServiceContext, UserAlreadyExists}
+import com.bootes.dao.keycloak.Models.{ApiResponseError, ApiResponseSuccess, Attributes, CredentialRepresentation, Email, KeycloakUser, KeycloakUsers, Phone, QueryParams, ServiceContext, UserAlreadyExists}
 import com.bootes.dao.repository.{JSONB, UserRepository}
 import com.bootes.server.UserServer
 import com.bootes.server.UserServer.{CorrelationId, DebugJsonLog}
@@ -141,7 +141,7 @@ object CreateUserRequest {
   implicit val codec: JsonCodec[CreateUserRequest] = DeriveJsonCodec.gen[CreateUserRequest]
   val sample = CreateUserRequest(`type` = "real", code = "111", name = Name("X", None, "Z"), status = "active")
 
-  implicit def toKeycloakUser(user: CreateUserRequest): KeycloakUser = KeycloakUser(username = user.code, firstName = user.name.firstName, lastName = user.name.lastName, email = user.contactMethod.map(_.email1).flatten,
+  implicit def toKeycloakUser(user: CreateUserRequest): KeycloakUser = KeycloakUser(id = user.id.map(_.toString), username = user.code, firstName = user.name.firstName, lastName = user.name.lastName, email = user.contactMethod.map(_.email1).flatten,
     attributes = user.vector.map(v => Attributes(pancard = v.pancard.map(Seq(_)), passport = v.passportNo.map(Seq(_)))),
     credentials = user.password.map(p => CredentialRepresentation(temporary = false, `type` = "password", value = p)).toSet
   )
@@ -184,7 +184,7 @@ trait UserService {
   def create(request: CreateUserRequest)(implicit ctx: ServiceContext): Task[User]
   def upsert(request: CreateUserRequest)(implicit ctx: ServiceContext): ZIO[Any, Serializable, User]
   def update(id: UUID, request: CreateUserRequest)(implicit ctx: ServiceContext): Task[User]
-  def all()(implicit ctx: ServiceContext): Task[Seq[User]]
+  def all(params: Option[QueryParams])(implicit ctx: ServiceContext): Task[Seq[User]]
   def get(id: UUID)(implicit ctx: ServiceContext): Task[User]
   def get(code: String)(implicit ctx: ServiceContext): Task[User]
   def getByEmail(email: String)(implicit ctx: ServiceContext): Task[User]
@@ -205,7 +205,7 @@ case class UserServiceLive(repository: UserRepository, console: Console.Service)
     repository.create(User.fromUserRecord(request))
   }
 
-  override def all()(implicit ctx: ServiceContext): Task[Seq[User]] = for {
+  override def all(params: Option[QueryParams])(implicit ctx: ServiceContext): Task[Seq[User]] = for {
     users <- repository.all
     _     <- console.putStrLn(s"Users: ${users.map(_.code).mkString(",")}")
   } yield users.sortBy(_.id)
@@ -232,7 +232,6 @@ case class KeycloakUserServiceLive(console: Console.Service) extends UserService
 
   override def upsert(request: CreateUserRequest)(implicit serviceContext: ServiceContext): ZIO[Any, Serializable, User] = {
     val inputRequest = CreateUserRequest.toKeycloakUser(request)
-    //val result: ZIO[Logging with Clock with system.System, Serializable, User] = for {
       val result = for {
       configValue <- keycloakConfigValue
       _ <- log.locally(CorrelationId(serviceContext.requestId).andThen(DebugJsonLog(configValue.toString)))(
@@ -248,7 +247,7 @@ case class KeycloakUserServiceLive(console: Console.Service) extends UserService
             log.locally(CorrelationId(serviceContext.requestId).andThen(DebugJsonLog(data.toString)))(
               log.debug(s"Got response for $url")
             ) &>
-            ZIO.succeed(User.fromUserRecord(request))
+            ZIO.succeed(User.fromUserRecord(request).copy(id = None))
           case Left(data) =>
             log.locally(CorrelationId(serviceContext.requestId).andThen(DebugJsonLog(data)))(
               log.debug(s"Error received for $url with response: $data")
@@ -276,20 +275,23 @@ case class KeycloakUserServiceLive(console: Console.Service) extends UserService
         //result.mapError(e => Left(e)).provideLayer(Clock.live ++ UserServer.logLayer ++ system.System.live)
   }
 
-  override def all()(implicit serviceContext: ServiceContext): Task[Seq[User]] = {
+  override def all(params: Option[QueryParams])(implicit serviceContext: ServiceContext): Task[Seq[User]] = {
     val result = for {
       configValue <- keycloakConfigValue
       _ <- log.locally(CorrelationId(serviceContext.requestId).andThen(DebugJsonLog(configValue.toString)))(
         log.debug(s"Loaded config for getting all users")
       )
-      url = s"${configValue.keycloak.url}/${configValue.keycloak.adminUsername}/realms/${configValue.keycloak.realm.getOrElse("")}/users"
+      //url = s"${configValue.keycloak.url}/${configValue.keycloak.adminUsername}/realms/${configValue.keycloak.realm.getOrElse("")}/users"
+      url = s"${configValue.keycloak.url}/realms/${configValue.keycloak.masterRealm}/extended-api/realms/${configValue.keycloak.realm.getOrElse("")}/users"
       res <- {
-        ZSttpClient.getCollection(url, CreateUserRequest.sample, classOf[List[KeycloakUser]], FormUsingJson)
+        //ZSttpClient.getCollection(url, CreateUserRequest.sample, classOf[List[KeycloakUser]], FormUsingJson)
+        ZSttpClient.get(url, CreateUserRequest.sample, classOf[KeycloakUsers], FormUsingJson, params)
       }
       output <- {
         res match {
           case Right(data) =>
-            ZIO.succeed(data.map(x => User.fromKeycloakUser(x)))
+            ZIO.succeed(data.users.map(x => User.fromKeycloakUser(x)))
+            //ZIO.succeed(data.map(x => User.fromKeycloakUser(x)))
           case Left(data) =>
             val error: String = data.fromJson[ApiResponseError].fold(s => s, c => c.errorMessage)
             log.locally(CorrelationId(serviceContext.requestId).andThen(DebugJsonLog(data)))(
@@ -304,14 +306,67 @@ case class KeycloakUserServiceLive(console: Console.Service) extends UserService
       .provideLayer(AsyncHttpClientZioBackend.layer() ++ Clock.live ++ UserServer.logLayer ++ system.System.live)
   }
 
-  override def get(id: UUID)(implicit ctx: ServiceContext): Task[User] = ZIO.effect(User.sample)
+  override def get(id: UUID)(implicit serviceContext: ServiceContext): Task[User] = {
+    val result = for {
+      configValue <- keycloakConfigValue
+      _ <- log.locally(CorrelationId(serviceContext.requestId).andThen(DebugJsonLog(configValue.toString)))(
+        log.debug(s"Loaded config for getting user by id, $id")
+      )
+      url = s"${configValue.keycloak.url}/${configValue.keycloak.adminUsername}/realms/${configValue.keycloak.realm.getOrElse("")}/users/${id.toString}"
+      res <- {
+        ZSttpClient.get(url, CreateUserRequest.sample, classOf[KeycloakUser], FormUsingJson)
+      }
+      output <- {
+        res match {
+          case Right(data) =>
+            ZIO.succeed(User.fromKeycloakUser(data))
+          case Left(data) =>
+            val error: String = data.fromJson[ApiResponseError].fold(s => s, c => c.errorMessage)
+            log.locally(CorrelationId(serviceContext.requestId).andThen(DebugJsonLog(data)))(
+              log.debug(s"Error, $error for $url")
+            ) &>
+            ZIO.fail(error)
+        }
+      }
+    } yield output
+    result
+      .mapError(error => new RuntimeException(s"Error: $error") )
+      .provideLayer(AsyncHttpClientZioBackend.layer() ++ Clock.live ++ UserServer.logLayer ++ system.System.live)
+  }
 
   override def update(id: UUID, request: CreateUserRequest)(implicit ctx: ServiceContext): Task[User] =  {
     ZIO.effect(User.sample)
   }
 
-  override def get(code: String)(implicit ctx: ServiceContext): Task[User] =
-    ZIO.effect(User.sample)
+  override def get(code: String)(implicit serviceContext: ServiceContext): Task[User] = {
+
+    val result = for {
+      configValue <- keycloakConfigValue
+      _ <- log.locally(CorrelationId(serviceContext.requestId).andThen(DebugJsonLog(configValue.toString)))(
+        log.debug(s"Loaded config for getting user by id, $code")
+      )
+      url = s"${configValue.keycloak.url}/realms/${configValue.keycloak.masterRealm}/extended-api/realms/${configValue.keycloak.realm.getOrElse("")}/users"
+      res <- {
+        ZSttpClient.get(url, CreateUserRequest.sample, classOf[KeycloakUsers], FormUsingJson)
+      }
+      output <- {
+        res match {
+          case Right(data) =>
+            ZIO.succeed(User.sample)
+          //ZIO.succeed(data.users.map(x => User.fromKeycloakUser(x)))
+          case Left(data) =>
+            val error: String = data.fromJson[ApiResponseError].fold(s => s, c => c.errorMessage)
+            log.locally(CorrelationId(serviceContext.requestId).andThen(DebugJsonLog(data)))(
+              log.debug(s"Error, $error for $url")
+            ) &>
+              ZIO.fail(error)
+        }
+      }
+    } yield output
+    result
+      .mapError(error => new RuntimeException(s"Error: $error") )
+      .provideLayer(AsyncHttpClientZioBackend.layer() ++ Clock.live ++ UserServer.logLayer ++ system.System.live)
+  }
 
   override def getByEmail(email: String)(implicit ctx: ServiceContext): Task[User] =
     ZIO.effect(User.sample)

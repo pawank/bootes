@@ -5,7 +5,7 @@ import com.bootes.dao.repository.NotFoundException
 import com.bootes.dao.{CreateUserRequest, ResponseMessage, UserService}
 import com.bootes.dao.{CreateUserRequest, UserService}
 import com.bootes.server.UserServer.{CorrelationId, DebugJsonLog}
-import com.bootes.server.auth.{ApiToken, LogoutRequest, Token}
+import com.bootes.server.auth.{ApiToken, FailedLogin, LogoutRequest, Token}
 import pdi.jwt.JwtClaim
 import zhttp.http._
 import zio.console._
@@ -64,12 +64,14 @@ object UserEndpoints extends RequestOps {
 
 trait RequestOps {
 
-  def extractBodyFromJson[A](request: Request)(implicit codec: JsonCodec[A]): IO[Serializable, A] =
+  def extractBodyFromJson[A](request: Request)(implicit codec: JsonCodec[A], serviceContext: ServiceContext): ZIO[Logging, Serializable, A] =
     for {
       requestOrError <- ZIO.fromOption(request.getBodyAsString.map(_.fromJson[A]))
+      _ <- log.locally(CorrelationId(serviceContext.requestId).andThen(DebugJsonLog(serviceContext.toString)))(
+        if (requestOrError.isRight) log.info(s"Request body is successfully parsed to the type") else log.info(s"Request body parsing error: ${requestOrError.left.toSeq.mkString}")
+      )
       body           <- {
-        //println(requestOrError)
-        ZIO.fromEither(requestOrError)
+        ZIO.fromEither(requestOrError).mapError(e => s"Request body parsing error: ${e}")
       }
     } yield body
 }

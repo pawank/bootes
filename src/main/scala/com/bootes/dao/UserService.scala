@@ -2,7 +2,7 @@ package com.bootes.dao
 
 import com.bootes.client.{FormUrlEncoded, FormUsingJson, NoContent, ZSttpClient}
 import com.bootes.config.Configuration.{KeycloakConfig, keycloakConfigDescription, keycloakConfigLayer, keycloakConfigValue}
-import com.bootes.dao.keycloak.Models.{ApiResponseError, ApiResponseSuccess, Attributes, Email, KeycloakUser, Phone, ServiceContext}
+import com.bootes.dao.keycloak.Models.{ApiResponseError, ApiResponseSuccess, Attributes, CredentialRepresentation, Email, KeycloakUser, Phone, ServiceContext}
 import com.bootes.dao.repository.{JSONB, UserRepository}
 import com.bootes.server.UserServer
 import com.bootes.server.UserServer.{CorrelationId, DebugJsonLog}
@@ -73,20 +73,24 @@ object LegalEntity {
   implicit val codec: JsonCodec[LegalEntity] = DeriveJsonCodec.gen[LegalEntity]
 }
 
+case class ContactMethod(email1: Option[String] = None,
+                         email2: Option[String] = None,
+                         email3: Option[String] = None,
+                         phone1: Option[String] = None,
+                         phone2: Option[String] = None,
+                         phone3: Option[String] = None) extends Embedded
+object ContactMethod {
+  implicit val codec: JsonCodec[ContactMethod] = DeriveJsonCodec.gen[ContactMethod]
+}
 
-case class PiiInfo(firstName: String,
+case class Name(firstName: String,
                    middleName: Option[String] = None,
                    lastName: String,
-                   email1: Option[String] = None,
-                   email2: Option[String] = None,
-                   email3: Option[String] = None,
-                   phone1: Option[Phone] = None,
-                   phone2: Option[String] = None,
-                   phone3: Option[String] = None) extends Embedded
-object PiiInfo {
+                   ) extends Embedded
+object Name {
   import Email._
   import Phone._
-  implicit val codec: JsonCodec[PiiInfo] = DeriveJsonCodec.gen[PiiInfo]
+  implicit val codec: JsonCodec[Name] = DeriveJsonCodec.gen[Name]
 }
 
 case class Attribute(key: String, value: String)
@@ -99,12 +103,13 @@ case class User(
   id: Long = -1,
   `type`: String,
   code: String,
-  pii: PiiInfo,
+  name: Name,
+  contactMethod: Option[ContactMethod] = None,
   vector: Option[VectorInfo] = None,
   gender: Option[String] = None,
   dateOfBirth: Option[java.time.LocalDate] = None,
   placeOfBirth: Option[String] = None,
-  address: Option[PrimaryAddress] = None,
+  primaryAddress: Option[PrimaryAddress] = None,
   //legalEntity: LegalEntity,
   roles: List[String] = List.empty,
   scopes: List[String] = List.empty,
@@ -116,14 +121,14 @@ case class CreateUserRequest (
                  requestId: Option[String] = None,
                  `type`: String,
                  code: String,
-                 pii: PiiInfo,
+                 password: Option[String] = None,
+                 name: Name,
+                 contactMethod: Option[ContactMethod] = None,
                  vector: Option[VectorInfo] = None,
                  gender: Option[String] = None,
                  dateOfBirth: Option[java.time.LocalDate] = None,
                  placeOfBirth: Option[String] = None,
                  address: Option[Address] = None,
-                 //legalEntity: LegalEntity,
-                 //attributes: Map[String, String] = Map.empty,
                  //attributes: JSONB = JSONB.apply(String.valueOf("{}").getBytes()),
                  roles: List[String] = List.empty,
                  scopes: List[String] = List.empty,
@@ -131,10 +136,11 @@ case class CreateUserRequest (
                )
 object CreateUserRequest {
   implicit val codec: JsonCodec[CreateUserRequest] = DeriveJsonCodec.gen[CreateUserRequest]
-  val sample = CreateUserRequest(`type` = "real", code = "111", pii = PiiInfo(firstName = "Pawan", lastName = "Kumar"), status = "active")
+  val sample = CreateUserRequest(`type` = "real", code = "111", name = Name("X", None, "Z"), status = "active")
 
-  implicit def toKeycloakUser(user: CreateUserRequest): KeycloakUser = KeycloakUser(username = user.code, firstName = user.pii.firstName, lastName = user.pii.lastName, email = user.pii.email1,
-    attributes = user.vector.map(v => Attributes(pancard = v.pancard.map(Seq(_)), passport = v.passportNo.map(Seq(_))))
+  implicit def toKeycloakUser(user: CreateUserRequest): KeycloakUser = KeycloakUser(username = user.code, firstName = user.name.firstName, lastName = user.name.lastName, email = user.contactMethod.map(_.email1).flatten,
+    attributes = user.vector.map(v => Attributes(pancard = v.pancard.map(Seq(_)), passport = v.passportNo.map(Seq(_)))),
+    credentials = user.password.map(p => CredentialRepresentation(temporary = false, `type` = "password", value = p)).toSet
   )
 }
 
@@ -150,10 +156,10 @@ object User {
   implicit def fromSeqUserRecord(records: Seq[CreateUserRequest]): Seq[User] = records.map(fromUserRecord)
   implicit val codec: JsonCodec[User]                                 = DeriveJsonCodec.gen[User]
 
-  val sample = User(`type` = "real", code = "1", pii = PiiInfo(firstName = "Pawan", lastName = "Kumar"), status = "active", metadata = Some(Metadata.default))
+  val sample = User(`type` = "real", code = "1", name = Name(firstName = "Pawan", lastName = "Kumar"), status = "active", metadata = Some(Metadata.default))
 
   implicit def fromKeycloakUser(keycloakUser: KeycloakUser): User = {
-    User(id = -1, `type` = "real", code = keycloakUser.username, pii = PiiInfo(firstName = keycloakUser.firstName, lastName = keycloakUser.lastName, email1 = keycloakUser.email),
+    User(id = -1, `type` = "real", code = keycloakUser.username, name = Name(firstName = keycloakUser.firstName, lastName = keycloakUser.lastName), contactMethod = Some(ContactMethod(email1 = keycloakUser.email)),
       status = if (keycloakUser.enabled) "active" else "inactive", metadata = Some(Metadata.default)
     )
   }
@@ -204,6 +210,7 @@ case class KeycloakUserServiceLive(console: Console.Service) extends UserService
 
   override def create(request: CreateUserRequest)(implicit serviceContext: ServiceContext): Task[User] = {
     val inputRequest = CreateUserRequest.toKeycloakUser(request)
+    //val result: ZIO[Logging with Clock with system.System, Serializable, User] = for {
       val result = for {
       configValue <- keycloakConfigValue
       _ <- log.locally(CorrelationId(serviceContext.requestId).andThen(DebugJsonLog(configValue.toString)))(
@@ -221,11 +228,14 @@ case class KeycloakUserServiceLive(console: Console.Service) extends UserService
             ) &>
             ZIO.succeed(User.fromUserRecord(request))
           case Left(data) =>
-            val error: String = data.fromJson[ApiResponseError].fold(s => s, c => c.errorMessage)
             log.locally(CorrelationId(serviceContext.requestId).andThen(DebugJsonLog(data)))(
-              log.debug(s"Error for $url")
-            ) &>
-            ZIO.fail(error)
+              log.debug(s"Error received for $url with response: $data")
+            ) &> {
+              val error: String = data.fromJson[ApiResponseError].fold(s => s, c => c.errorMessage)
+              log.locally(CorrelationId(serviceContext.requestId).andThen(DebugJsonLog(data)))(
+                log.debug(s"Error for $url")
+              ) &> ZIO.fail(error)
+            }
         }
       }
     } yield output
@@ -239,6 +249,7 @@ case class KeycloakUserServiceLive(console: Console.Service) extends UserService
                 }
         )
       .provideLayer(Clock.live ++ UserServer.logLayer ++ system.System.live)
+        //result.mapError(e => Left(e)).provideLayer(Clock.live ++ UserServer.logLayer ++ system.System.live)
   }
 
   override def all()(implicit serviceContext: ServiceContext): Task[Seq[User]] = {

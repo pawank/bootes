@@ -83,10 +83,16 @@ object Models {
     implicit val codec: JsonCodec[Attributes] = DeriveJsonCodec.gen[Attributes]
   }
 
+  case class CredentialRepresentation(temporary: Boolean, `type`: String, value: String)
+  object CredentialRepresentation {
+    implicit val codec: JsonCodec[CredentialRepresentation] = DeriveJsonCodec.gen[CredentialRepresentation]
+  }
+
   case class KeycloakUser (
                              id: Option[String] = None,
                              createdTimestamp: Option[Long] = None,
                              username: String,
+                             password: Option[String] = None,
                              enabled: Boolean = true,
                              totp: Option[Boolean] = None,
                              emailVerified: Boolean = false,
@@ -96,6 +102,7 @@ object Models {
                              attributes: Option[Attributes] = None,
                              requiredActions: Seq[String] = Seq.empty,
                              notBefore: Int = 0,
+                             credentials: Set[CredentialRepresentation] = Set.empty,
                              access: Option[Access] = None
                            ) {
   }

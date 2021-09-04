@@ -2,6 +2,7 @@ package com.bootes.server.auth
 
 import com.bootes.client.{FormUrlEncoded, ZSttpClient}
 import com.bootes.config.Configuration.{KeycloakConfig, keycloakConfigValue}
+import com.bootes.dao.Metadata
 import com.bootes.dao.keycloak.Models.ServiceContext
 import com.bootes.server.UserServer.{CorrelationId, DebugJsonLog}
 import com.bootes.server.{RequestOps, UserServer}
@@ -196,10 +197,13 @@ object AuthenticationApp extends RequestOps {
 
   def login: Http[Logging with Clock with system.System, HttpError.Unauthorized, Request, UResponse] = Http
     .collectM[Request] { case req@Method.POST -> Root / "bootes" / "v1" / "login" =>
+      implicit val serviceContext: ServiceContext = ServiceContext(token = "", requestId = ServiceContext.newRequestId())
       for {
+        _ <- log.locally(CorrelationId(serviceContext.requestId).andThen(DebugJsonLog(serviceContext.toString)))(
+          log.debug("Extracting login payload for checking the credentials")
+        )
         loginRequest <- extractBodyFromJson[LoginRequest](req)
         authenticatedUser <- {
-          implicit val serviceContext = ServiceContext("", requestId = ServiceContext.newRequestId())
           validateLogin(loginRequest)
         }
         jwtClaim <- ZIO.effect(authenticatedUser.copy(username = loginRequest.username))
@@ -208,8 +212,11 @@ object AuthenticationApp extends RequestOps {
         Response.jsonString(jwtClaim.toJson)
       }
     }
-    .catchAll { case FailedLogin(user) =>
+    .catchAll {
+      case FailedLogin(user) =>
       Http.fail(HttpError.Unauthorized(s"Failed login for user: $user."))
+      case ex @ _ =>
+        Http.fail(HttpError.Unauthorized(s"Login Failed with error, ${ex.toString}"))
     }
 
   def getLoginUrl(configValue: KeycloakConfig, request: LoginRequest): String = {
@@ -224,6 +231,9 @@ object AuthenticationApp extends RequestOps {
   def performLogin(request: LoginRequest)(implicit serviceContext: ServiceContext): ZIO[Logging with Clock with system.System, FailedLogin, ApiToken] = {
     val apiLoginRequest = if (request.isAdminCli) ApiLoginRequest.getLoginRequest(request.clientId.getOrElse("")).copy(username = ApiLoginRequest.default.username, password = ApiLoginRequest.default.password) else ApiLoginRequest.getLoginRequest(request.clientId.getOrElse("")).copy(username = request.username, password = request.password)
     val r: ZIO[Logging with Clock with system.System, Object, ApiToken] = for {
+      _ <- log.locally(CorrelationId(serviceContext.requestId).andThen(DebugJsonLog(request.username)))(
+        log.debug("Performing login credentials validation")
+      )
       configValue <- keycloakConfigValue
       url = getLoginUrl(configValue, request)
       maybeToken <- {
@@ -232,8 +242,14 @@ object AuthenticationApp extends RequestOps {
       value <- {
         maybeToken match {
           case Right(tokenObject) =>
+            log.locally(CorrelationId(serviceContext.requestId).andThen(DebugJsonLog(request.username)))(
+              log.info(s"Login successful at ${Metadata.default.createdAt}")
+            ) &>
               ZIO.succeed(tokenObject.copy(requestId = Some(serviceContext.requestId.toString)))
           case Left(error) =>
+            log.locally(CorrelationId(serviceContext.requestId).andThen(DebugJsonLog(request.username)))(
+              log.info(s"Login failed: $error")
+            ) &>
             ZIO.fail(FailedLogin(error))
         }
       }

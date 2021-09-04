@@ -203,7 +203,10 @@ object AuthenticationApp extends RequestOps {
           validateLogin(loginRequest)
         }
         jwtClaim <- ZIO.effect(authenticatedUser.copy(username = loginRequest.username))
-      } yield Response.jsonString(jwtClaim.toJson)
+      } yield {
+        //println(s"CLAIM: $jwtClaim")
+        Response.jsonString(jwtClaim.toJson)
+      }
     }
     .catchAll { case FailedLogin(user) =>
       Http.fail(HttpError.Unauthorized(s"Failed login for user: $user."))

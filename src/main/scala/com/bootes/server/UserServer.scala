@@ -72,20 +72,28 @@ object UserServer extends App {
   val userEndpoints: Http[Has[UserService] with Clock with Console with Logging with ZLogging with system.System, HttpError, Request, Response[Has[UserService]  with Console with Logging with ZLogging, HttpError]] =
     CORS(
       AuthenticationApp.authenticate(HttpApp.forbidden("None shall pass."), UserEndpoints.user),
-      config = CORSConfig(anyOrigin = true)
+      config = CORSConfig(anyOrigin = true, anyMethod = true)
     )
 
   val formEndpoints: Http[Has[FormService] with Clock with Console with Logging with ZLogging with system.System, HttpError, Request, Response[Has[FormService] with Console with Logging with ZLogging, HttpError]] =
     CORS(
         AuthenticationApp.authenticate(HttpApp.forbidden("None shall pass."), FormEndpoints.form),
-      config = CORSConfig(anyOrigin = true)
+      config = CORSConfig(anyOrigin = true, anyMethod = true)
     )
+
+  def checkAndAllowedOrigins(origin: String): Boolean = origin.equalsIgnoreCase("*")
+
+  def getCorsConfig(): CORSConfig = {
+    CORSConfig(anyOrigin = false, anyMethod = true, exposedHeaders = Some(Set("X-Requested-With", "Content-Type", "Authorization", "Accept", "Origin")), allowedHeaders = Some(Set("X-Requested-With", "Content-Type", "Authorization", "Accept", "Origin")), allowedMethods = Some(Set(zhttp.http.Method.HEAD, zhttp.http.Method.PATCH, zhttp.http.Method.OPTIONS, zhttp.http.Method.GET, zhttp.http.Method.POST, zhttp.http.Method.PUT, zhttp.http.Method.DELETE)), allowedOrigins = checkAndAllowedOrigins)
+
+  }
 
   val program: ZIO[Any, Throwable, Nothing] = {
     import sttp.client3._
     import sttp.client3.asynchttpclient.zio._
     scribe.info("Starting bootes service..")
-    val app = CORS(getVersion(root) +++ AuthenticationApp.login, config = CORSConfig(anyOrigin = true)) +++ userEndpoints +++ formEndpoints
+    //val app = getVersion(root) +++ AuthenticationApp.login +++ userEndpoints +++ formEndpoints
+    val app = CORS(getVersion(root) +++ AuthenticationApp.login, config = getCorsConfig()) +++ userEndpoints +++ formEndpoints
     val server = Server.port(8080) ++ Server.app(app) ++ Server.maxRequestSize(4194304)
     server.start.inject(ServerChannelFactory.auto, EventLoopGroup.auto(0), Console.live, ZioQuillContext.dataSourceLayer, OptionsRepository.layer, ValidationsRepository.layer, FormElementsRepository.layer, logLayer, Clock.live, ZLogging.consoleJson(), AsyncHttpClientZioBackend.layer(), UserService.layerKeycloakService, FormRepository.layer, FormService.layer, system.System.live)
   }

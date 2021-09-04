@@ -68,7 +68,7 @@ trait RequestOps {
     for {
       requestOrError <- ZIO.fromOption(request.getBodyAsString.map(_.fromJson[A]))
       body           <- {
-        println(requestOrError)
+        //println(requestOrError)
         ZIO.fromEither(requestOrError)
       }
     } yield body

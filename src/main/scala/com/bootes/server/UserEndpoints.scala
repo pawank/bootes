@@ -1,6 +1,6 @@
 package com.bootes.server
 
-import com.bootes.dao.keycloak.Models.ServiceContext
+import com.bootes.dao.keycloak.Models.{RequestParsingError, ServiceContext, UserAlreadyExists}
 import com.bootes.dao.repository.NotFoundException
 import com.bootes.dao.{CreateUserRequest, ResponseMessage, UserService}
 import com.bootes.dao.{CreateUserRequest, UserService}
@@ -41,7 +41,7 @@ object UserEndpoints extends RequestOps {
         case req@Method.POST -> Root / "bootes" / "v1" / "users" =>
           for {
             request <- extractBodyFromJson[CreateUserRequest](req)
-            results <- UserService.create(request)(serviceContext.copy(requestId = request.requestId.map(UUID.fromString(_)).getOrElse(serviceContext.requestId)))
+            results <- UserService.upsert(request)(serviceContext.copy(requestId = request.requestId.map(UUID.fromString(_)).getOrElse(serviceContext.requestId)))
           } yield Response.jsonString(results.toJson)
         case req@Method.POST -> Root / "bootes" / "v1" / "users" / "logout" =>
           for {
@@ -53,6 +53,10 @@ object UserEndpoints extends RequestOps {
           } yield Response.jsonString(results.toJson)
       }
       .catchAll {
+        case UserAlreadyExists(msg) =>
+          Http.fail(HttpError.Conflict(msg))
+        case RequestParsingError(msg) =>
+          Http.fail(HttpError.BadRequest(msg))
         case NotFoundException(msg, id) =>
           Http.fail(HttpError.NotFound(Root / "bootes" / "v1" / "users" / id.toString))
         case ex: Throwable =>
@@ -71,7 +75,7 @@ trait RequestOps {
         if (requestOrError.isRight) log.info(s"Request body is successfully parsed to the type") else log.info(s"Request body parsing error: ${requestOrError.left.toSeq.mkString}")
       )
       body           <- {
-        ZIO.fromEither(requestOrError).mapError(e => s"Request body parsing error: ${e}")
+        ZIO.fromEither(requestOrError).mapError(e => RequestParsingError(s"Request body parsing error: ${e}"))
       }
     } yield body
 }

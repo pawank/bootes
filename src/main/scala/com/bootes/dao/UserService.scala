@@ -2,7 +2,7 @@ package com.bootes.dao
 
 import com.bootes.client.{FormUrlEncoded, FormUsingJson, NoContent, ZSttpClient}
 import com.bootes.config.Configuration.{KeycloakConfig, keycloakConfigDescription, keycloakConfigLayer, keycloakConfigValue}
-import com.bootes.dao.keycloak.Models.{ApiResponseError, ApiResponseSuccess, Attributes, CredentialRepresentation, Email, KeycloakUser, Phone, ServiceContext}
+import com.bootes.dao.keycloak.Models.{ApiResponseError, ApiResponseSuccess, Attributes, CredentialRepresentation, Email, KeycloakUser, Phone, ServiceContext, UserAlreadyExists}
 import com.bootes.dao.repository.{JSONB, UserRepository}
 import com.bootes.server.UserServer
 import com.bootes.server.UserServer.{CorrelationId, DebugJsonLog}
@@ -168,6 +168,7 @@ object User {
 @accessible
 trait UserService {
   def create(request: CreateUserRequest)(implicit ctx: ServiceContext): Task[User]
+  def upsert(request: CreateUserRequest)(implicit ctx: ServiceContext): ZIO[Any, Serializable, User]
   def update(id: Long, request: CreateUserRequest)(implicit ctx: ServiceContext): Task[User]
   def all()(implicit ctx: ServiceContext): Task[Seq[User]]
   def get(id: Long)(implicit ctx: ServiceContext): Task[User]
@@ -183,6 +184,9 @@ object UserService {
 
 case class UserServiceLive(repository: UserRepository, console: Console.Service) extends UserService {
 
+  override def upsert(request: CreateUserRequest)(implicit ctx: ServiceContext): ZIO[Any, Serializable, User] = {
+    repository.create(User.fromUserRecord(request))
+  }
   override def create(request: CreateUserRequest)(implicit ctx: ServiceContext): Task[User] = {
     repository.create(User.fromUserRecord(request))
   }
@@ -209,6 +213,10 @@ case class KeycloakUserServiceLive(console: Console.Service) extends UserService
   import sttp.client3.asynchttpclient.zio._
 
   override def create(request: CreateUserRequest)(implicit serviceContext: ServiceContext): Task[User] = {
+    ???
+  }
+
+  override def upsert(request: CreateUserRequest)(implicit serviceContext: ServiceContext): ZIO[Any, Serializable, User] = {
     val inputRequest = CreateUserRequest.toKeycloakUser(request)
     //val result: ZIO[Logging with Clock with system.System, Serializable, User] = for {
       val result = for {
@@ -243,9 +251,11 @@ case class KeycloakUserServiceLive(console: Console.Service) extends UserService
       .mapError(someError =>
               someError match {
                 case Right(v) =>
-                    new RuntimeException(s"Success: $v")
+                    //new RuntimeException(s"Success: $v")
+                  UserAlreadyExists(v.toString)
                   case Left(e) =>
-                    new RuntimeException(s"Error: $e")
+                    //new RuntimeException(s"Error: $e")
+                    UserAlreadyExists(e.toString)
                 }
         )
       .provideLayer(Clock.live ++ UserServer.logLayer ++ system.System.live)

@@ -62,13 +62,13 @@ trait HttpClient {
                 case Right(data) =>
                   val xs = data.fromJson[U]
                   log.locally(CorrelationId(serviceContext.requestId).andThen(DebugJsonLog(if (xs.isLeft) xs.left.toOption.getOrElse("Error in getting error projection of the response") else "JSON fetched and prepared from the response")))(
-                    log.debug(s"Received response for $url")
+                    log.debug(s"${r.code} Received response for $url")
                   ) &> {
                     ZIO.succeed(xs)
                   }
                 case Left(error) =>
                   log.locally(CorrelationId(serviceContext.requestId).andThen(DebugJsonLog(res.toString)))(
-                    log.debug(s"Received error $error for $url")
+                    log.debug(s"${r.code} Received error $error for $url")
                   ) &>
                     ZIO.fail(Left(error))
               }
@@ -76,12 +76,12 @@ trait HttpClient {
               r.body match {
                 case Right(data) =>
                   log.locally(CorrelationId(serviceContext.requestId).andThen(DebugJsonLog(res.toString)))(
-                    log.debug(s"Received response $data for $url")
+                    log.debug(s"${r.code} Received response $data for $url")
                   ) &>
                     ZIO.fail(data)
                 case Left(error) =>
                   log.locally(CorrelationId(serviceContext.requestId).andThen(DebugJsonLog(res.toString)))(
-                    log.debug(s"Received error $error for $url")
+                    log.debug(s"${r.code} Received error $error for $url")
                   ) &>
                     ZIO.fail(Left(error))
               }
@@ -120,13 +120,13 @@ trait HttpClient {
                 case Right(data) =>
                   val xs = data.fromJson[List[U]]
                   log.locally(CorrelationId(serviceContext.requestId).andThen(DebugJsonLog(if (xs.isLeft) xs.left.toOption.getOrElse("Error in getting error projection of the response") else "JSON prepared from the collection response")))(
-                    log.debug(s"$statusCode Received response for $url")
+                    log.debug(s"${r.code} Received response for $url")
                   ) &> {
                     ZIO.succeed(xs)
                   }
                 case Left(error) =>
                   log.locally(CorrelationId(serviceContext.requestId).andThen(DebugJsonLog(res.toString)))(
-                    log.debug(s"$statusCode Received error $error for $url")
+                    log.debug(s"${r.code} Received error $error for $url")
                   ) &>
                     ZIO.fail(Left(error))
               }
@@ -134,12 +134,12 @@ trait HttpClient {
               r.body match {
                 case Right(data) =>
                   log.locally(CorrelationId(serviceContext.requestId).andThen(DebugJsonLog(res.toString)))(
-                    log.debug(s"$statusCode Received response $data for $url")
+                    log.debug(s"${r.code} Received response $data for $url")
                   ) &>
                     ZIO.fail(data)
                 case Left(error) =>
                   log.locally(CorrelationId(serviceContext.requestId).andThen(DebugJsonLog(res.toString)))(
-                    log.debug(s"$statusCode Received error $error for $url")
+                    log.debug(s"${r.code} Received error $error for $url")
                   ) &>
                     ZIO.fail(Left(error))
               }
@@ -185,18 +185,25 @@ trait HttpClient {
             val res: Task[Response[Either[String, String]]] = req.send(sttp.client3.logging.scribe.ScribeLoggingBackend(delegate = backend, logRequestHeaders = false, sensitiveHeaders = Set("Authorization")))
             res.flatMap(r => {
               val statusCode = r.code.code >= 200 && r.code.code < 300
+              println(r)
               r.body match {
                 case Right(data) =>
-                  val xs = if (r.code.code != 204) data.fromJson[U] else """{"value":"No Content"}""".fromJson[U]
+                  val xs = r.code.code match {
+                    case 201 =>
+                      """{"message":"Created"}""".fromJson[U]
+                    case 204 =>
+                      """{"message":"No Content"}""".fromJson[U]
+                    case _ =>
+                      data.fromJson[U]
+                  }
                   log.locally(CorrelationId(serviceContext.requestId).andThen(DebugJsonLog(if (xs.isLeft) xs.left.toOption.getOrElse("Error in getting error projection of the response") else "JSON prepared from the response")))(
-                      log.debug(s"$statusCode Received response and parsing successful for $url")
+                      log.debug(s"${r.code} Received response and parsing successful for $url")
                   ) &> {
-                    //println(s"DATA = $xs")
                     ZIO.succeed(xs)
                   }
                 case Left(error) =>
                   log.locally(CorrelationId(serviceContext.requestId).andThen(DebugJsonLog(res.toString)))(
-                    log.debug(s"$statusCode Received error $error for $url")
+                    log.debug(s"${r.code} Received error $error for $url")
                   ) &>
                   ZIO.fail(Left(error))
               }

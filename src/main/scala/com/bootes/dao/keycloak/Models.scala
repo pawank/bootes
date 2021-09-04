@@ -132,4 +132,8 @@ object Models {
     //implicit val codec: JsonCodec[ServiceContext] = DeriveJsonCodec.gen[ServiceContext]
     def newRequestId() = UUID.randomUUID()
   }
+
+
+  case class UserAlreadyExists(message: String) extends Exception(message)
+  case class RequestParsingError(message: String) extends Exception(message)
 }

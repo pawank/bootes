@@ -84,7 +84,7 @@ object UserServer extends App {
   def checkAndAllowedOrigins(origin: String): Boolean = origin.equalsIgnoreCase("*")
 
   def getCorsConfig(): CORSConfig = {
-    CORSConfig(anyOrigin = false, anyMethod = true, exposedHeaders = Some(Set("X-Requested-With", "Content-Type", "Authorization", "Accept", "Origin")), allowedHeaders = Some(Set("X-Requested-With", "Content-Type", "Authorization", "Accept", "Origin")), allowedMethods = Some(Set(zhttp.http.Method.HEAD, zhttp.http.Method.PATCH, zhttp.http.Method.OPTIONS, zhttp.http.Method.GET, zhttp.http.Method.POST, zhttp.http.Method.PUT, zhttp.http.Method.DELETE)), allowedOrigins = checkAndAllowedOrigins)
+    CORSConfig(anyOrigin = true, anyMethod = true, exposedHeaders = Some(Set("X-Requested-With", "Content-Type", "Authorization", "Accept", "Origin")), allowedHeaders = Some(Set("X-Requested-With", "Content-Type", "Authorization", "Accept", "Origin")), allowedMethods = Some(Set(zhttp.http.Method.HEAD, zhttp.http.Method.PATCH, zhttp.http.Method.OPTIONS, zhttp.http.Method.GET, zhttp.http.Method.POST, zhttp.http.Method.PUT, zhttp.http.Method.DELETE)), allowedOrigins = checkAndAllowedOrigins)
 
   }
 

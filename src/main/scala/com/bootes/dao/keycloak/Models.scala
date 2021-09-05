@@ -165,6 +165,7 @@ object Models {
   }
 
 
+  case class UserDoesNotExists(message: String) extends Exception(message)
   case class UserAlreadyExists(message: String) extends Exception(message)
   case class RequestParsingError(message: String) extends Exception(message)
 }

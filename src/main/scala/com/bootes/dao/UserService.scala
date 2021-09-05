@@ -2,7 +2,7 @@ package com.bootes.dao
 
 import com.bootes.client.{FormUrlEncoded, FormUsingJson, NoContent, ZSttpClient}
 import com.bootes.config.Configuration.{KeycloakConfig, keycloakConfigDescription, keycloakConfigLayer, keycloakConfigValue}
-import com.bootes.dao.keycloak.Models.{ApiResponseError, ApiResponseSuccess, Attributes, CredentialRepresentation, Email, KeycloakUser, KeycloakUsers, Phone, QueryParams, ServiceContext, UserAlreadyExists}
+import com.bootes.dao.keycloak.Models.{ApiResponseError, ApiResponseSuccess, Attributes, CredentialRepresentation, Email, KeycloakUser, KeycloakUsers, Phone, QueryParams, ServiceContext, UserAlreadyExists, UserDoesNotExists}
 import com.bootes.dao.repository.{JSONB, UserRepository}
 import com.bootes.server.UserServer
 import com.bootes.server.UserServer.{CorrelationId, DebugJsonLog}
@@ -182,7 +182,7 @@ object User {
 @accessible
 trait UserService {
   def create(request: CreateUserRequest)(implicit ctx: ServiceContext): Task[User]
-  def upsert(request: CreateUserRequest)(implicit ctx: ServiceContext): ZIO[Any, Serializable, User]
+  def upsert(request: CreateUserRequest, methodType:Option[String])(implicit ctx: ServiceContext): ZIO[Any, Serializable, User]
   def update(id: UUID, request: CreateUserRequest)(implicit ctx: ServiceContext): Task[User]
   def all(params: Option[QueryParams])(implicit ctx: ServiceContext): Task[Seq[User]]
   def get(id: UUID)(implicit ctx: ServiceContext): Task[User]
@@ -198,8 +198,8 @@ object UserService {
 
 case class UserServiceLive(repository: UserRepository, console: Console.Service) extends UserService {
 
-  override def upsert(request: CreateUserRequest)(implicit ctx: ServiceContext): ZIO[Any, Serializable, User] = {
-    repository.create(User.fromUserRecord(request))
+  override def upsert(request: CreateUserRequest, methodType:Option[String] = Some("post"))(implicit ctx: ServiceContext): ZIO[Any, Serializable, User] = {
+    repository.upsert(User.fromUserRecord(request))
   }
   override def create(request: CreateUserRequest)(implicit ctx: ServiceContext): Task[User] = {
     repository.create(User.fromUserRecord(request))
@@ -230,7 +230,7 @@ case class KeycloakUserServiceLive(console: Console.Service) extends UserService
     ???
   }
 
-  override def upsert(request: CreateUserRequest)(implicit serviceContext: ServiceContext): ZIO[Any, Serializable, User] = {
+  override def upsert(request: CreateUserRequest, methodType:Option[String] = Some("post"))(implicit serviceContext: ServiceContext): ZIO[Any, Serializable, User] = {
     val inputRequest = CreateUserRequest.toKeycloakUser(request)
       val result = for {
       configValue <- keycloakConfigValue
@@ -239,7 +239,19 @@ case class KeycloakUserServiceLive(console: Console.Service) extends UserService
                                                                                                 )
       url = s"${configValue.keycloak.url}/${configValue.keycloak.adminUsername}/realms/${configValue.keycloak.realm.getOrElse("")}/users"
       res <- {
-        ZSttpClient.post(url, inputRequest, classOf[ApiResponseSuccess], FormUsingJson)
+        methodType match {
+          case Some(m)  if m.equalsIgnoreCase("put") =>
+            val url = s"${configValue.keycloak.url}/${configValue.keycloak.adminUsername}/realms/${configValue.keycloak.realm.getOrElse("")}/users/${request.id.getOrElse(UUID.randomUUID.toString).toString}"
+            log.locally(CorrelationId(serviceContext.requestId).andThen(DebugJsonLog(url)))(
+              log.debug(s"Upsert call to $url with method = $methodType")
+            ) &>
+            ZSttpClient.postOrPut("put", url, inputRequest, classOf[ApiResponseSuccess], FormUsingJson)
+          case _ =>
+            log.locally(CorrelationId(serviceContext.requestId).andThen(DebugJsonLog(url)))(
+              log.debug(s"Upsert call to $url with method = $methodType")
+            ) &>
+            ZSttpClient.postOrPut("post", url, inputRequest, classOf[ApiResponseSuccess], FormUsingJson)
+        }
       }
       output <- {
         res match {
@@ -335,7 +347,7 @@ case class KeycloakUserServiceLive(console: Console.Service) extends UserService
   }
 
   override def update(id: UUID, request: CreateUserRequest)(implicit ctx: ServiceContext): Task[User] =  {
-    ZIO.effect(User.sample)
+    upsert(request.copy(id = Some(id)), Some("put")).mapError(e => UserDoesNotExists(e.toString))
   }
 
   override def get(code: String)(implicit serviceContext: ServiceContext): Task[User] = {
@@ -379,7 +391,7 @@ case class KeycloakUserServiceLive(console: Console.Service) extends UserService
       )
       url = s"${configValue.keycloak.url}/realms/${configValue.keycloak.realm.getOrElse("")}/protocol/openid-connect/logout"
       res <- {
-        ZSttpClient.post(url, inputRequest, classOf[NoContent], FormUrlEncoded)
+        ZSttpClient.postOrPut("post", url, inputRequest, classOf[NoContent], FormUrlEncoded)
       }
       output <- {
         res match {

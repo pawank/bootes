@@ -275,7 +275,7 @@ object AuthenticationApp extends RequestOps {
       configValue <- keycloakConfigValue
       url = getTokenValidityCheckUrl(configValue, false)
       maybeToken <- {
-        ZSttpClient.post(url, request, classOf[ApiToken], FormUrlEncoded).mapError(e => FailedLogin(s"${e.toString}"))
+        ZSttpClient.postOrPut(methodType = "post", url, request, classOf[ApiToken], FormUrlEncoded).mapError(e => FailedLogin(s"${e.toString}"))
       }
       value <- {
         maybeToken match {

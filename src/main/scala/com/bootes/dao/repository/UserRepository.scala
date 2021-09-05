@@ -14,6 +14,7 @@ case class FieldValue(field: String, value: String)
 trait UserRepository {
   def create(user: User): Task[User]
   def update(user: User): Task[User]
+  def upsert(user: User, methodType: Option[String] = Some("post")): Task[User]
   def all: Task[Seq[User]]
   def filter(values: Seq[FieldValue]): Task[Seq[User]]
   def findById(id: UUID): Task[User]

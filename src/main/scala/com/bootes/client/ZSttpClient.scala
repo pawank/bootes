@@ -155,7 +155,7 @@ trait HttpClient {
     } yield output
   }
 
-  def post[T <: (Product with Serializable), U <: (Product with Serializable)](url: String, inputRequest: T, successType: Class[U], formType: FormType)(implicit serviceContext: ServiceContext, encoder: JsonEncoder[T], decoder: JsonDecoder[U]): ZIO[Logging with Clock, Serializable, Either[String, U]] = {
+  def postOrPut[T <: (Product with Serializable), U <: (Product with Serializable)](methodType: String, url: String, inputRequest: T, successType: Class[U], formType: FormType)(implicit serviceContext: ServiceContext, encoder: JsonEncoder[T], decoder: JsonDecoder[U]): ZIO[Logging with Clock, Serializable, Either[String, U]] = {
     for {
       _ <- log.locally(CorrelationId(serviceContext.requestId).andThen(DebugJsonLog(serviceContext.toString)))(
         log.debug(s"POST: $url")
@@ -177,9 +177,19 @@ trait HttpClient {
                 )
                 serviceContext.token match {
                   case "" =>
-                    basicRequest.body(payload, "utf-8").post(uri"$url").readTimeout(serviceContext.readTimeout)
+                    methodType match {
+                      case "put" =>
+                        basicRequest.body(payload, "utf-8").put(uri"$url").readTimeout(serviceContext.readTimeout)
+                      case _ =>
+                        basicRequest.body(payload, "utf-8").post(uri"$url").readTimeout(serviceContext.readTimeout)
+                    }
                   case _ =>
-                    basicRequest.auth.bearer(serviceContext.token).body(payload, "utf-8").post(uri"$url").readTimeout(serviceContext.readTimeout)
+                    methodType match {
+                      case "put" =>
+                        basicRequest.auth.bearer(serviceContext.token).body(payload, "utf-8").put(uri"$url").readTimeout(serviceContext.readTimeout)
+                      case _ =>
+                        basicRequest.auth.bearer(serviceContext.token).body(payload, "utf-8").post(uri"$url").readTimeout(serviceContext.readTimeout)
+                    }
                 }
               case FormUsingJson =>
                 val payload = inputRequest.toJson
@@ -269,7 +279,7 @@ object ZSttpClient extends App with HttpClient {
 
   def login(url: String, inputLoginRequest: Option[ApiLoginRequest])(implicit serviceContext: ServiceContext): ZIO[Logging with Clock, Serializable, Either[String, ApiToken]] = {
     val currentLoginRequest =  inputLoginRequest.getOrElse(ApiLoginRequest.default)
-    post(url, currentLoginRequest, classOf[ApiToken], FormUrlEncoded)
+    postOrPut("post", url, currentLoginRequest, classOf[ApiToken], FormUrlEncoded)
   }
 
   val program: ZIO[Logging with Clock with Console with EventLoopGroup with ChannelFactory with system.System, Serializable, Unit] =

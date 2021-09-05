@@ -60,6 +60,13 @@ case class UserRepositoryLive(dataSource: DataSource with Closeable, blocking: B
       users <- run(UserQueries.byId(user.id.getOrElse(UUID.randomUUID())))
     } yield users.headOption.getOrElse(throw new Exception("Update failed!"))
   }.dependOnDataSource().provide(dataSourceLayer)
+
+  override def upsert(user: User, methodType: Option[String] = Some("post")): Task[User] = transaction {
+    for {
+      _     <- run(UserQueries.upsertUser(user))
+      users <- run(UserQueries.byId(user.id.getOrElse(UUID.randomUUID())))
+    } yield users.headOption.getOrElse(throw new Exception("Update failed!"))
+  }.dependOnDataSource().provide(dataSourceLayer)
 }
 
 object UserQueries {

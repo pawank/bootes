@@ -46,10 +46,15 @@ object UserEndpoints extends RequestOps {
           for {
             user <- UserService.get(UUID.fromString(id))
           } yield Response.jsonString(user.toJson)
+        case req @ Method.PUT -> Root / "bootes" / "v1" / "users" / id =>
+          for {
+            request <- extractBodyFromJson[CreateUserRequest](req)
+            user <- UserService.update(UUID.fromString(id), request)
+          } yield Response.jsonString(user.toJson)
         case req@Method.POST -> Root / "bootes" / "v1" / "users" =>
           for {
             request <- extractBodyFromJson[CreateUserRequest](req)
-            results <- UserService.upsert(request)(serviceContext.copy(requestId = request.requestId.map(UUID.fromString(_)).getOrElse(serviceContext.requestId)))
+            results <- UserService.upsert(request, methodType = Some("post"))(serviceContext.copy(requestId = request.requestId.map(UUID.fromString(_)).getOrElse(serviceContext.requestId)))
           } yield Response.jsonString(results.toJson)
         case req@Method.POST -> Root / "bootes" / "v1" / "users" / "logout" =>
           for {

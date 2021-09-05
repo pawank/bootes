@@ -186,7 +186,6 @@ trait HttpClient {
                   case _ =>
                     methodType match {
                       case "put" =>
-                        println(s"PUT\n\n")
                         basicRequest.auth.bearer(serviceContext.token).body(payload, "utf-8").put(uri"$url").readTimeout(serviceContext.readTimeout)
                       case _ =>
                         basicRequest.auth.bearer(serviceContext.token).body(payload, "utf-8").post(uri"$url").readTimeout(serviceContext.readTimeout)
@@ -228,7 +227,7 @@ trait HttpClient {
                   log.locally(CorrelationId(serviceContext.requestId).andThen(DebugJsonLog(res.toString)))(
                     log.error(s"${r.code} Received error $error for $url")
                   ) &>
-                  ZIO.fail(Left(error))
+                  ZIO.fail(error)
               }
             })
           }

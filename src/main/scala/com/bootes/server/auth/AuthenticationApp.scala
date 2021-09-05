@@ -22,7 +22,7 @@ object Token {
   implicit val codec: JsonCodec[Token] = DeriveJsonCodec.gen[Token]
 }
 
-case class FailedLogin(user: String)
+case class FailedLogin(user: String, message: String, code: Int = 400)
 
 
 case class AuthenticatedUser(username: String, accessToken: String, refreshToken: String)
@@ -188,6 +188,8 @@ object AuthenticationApp extends RequestOps {
           req.getHeader("Authorization")
             .flatMap(header => {
               implicit val serviceContext = ServiceContext(token = getMaybeToken(header.value.toString.trim).getOrElse(""), requestId = ServiceContext.newRequestId)
+              val claim = jwtDecode(header.value.toString)
+              println(s"\n\n\nclaim = $claim")
               getToken(serviceContext.token)
             })
             //.flatMap(header => jwtDecode(header.value.toString))
@@ -195,12 +197,13 @@ object AuthenticationApp extends RequestOps {
         }
   }
 
-  def login: Http[Logging with Clock with system.System, HttpError.Unauthorized, Request, UResponse] = Http
+  def login: Http[Logging with Clock with system.System, HttpError.Unauthorized, Request, UResponse] = {
+    implicit val serviceContext: ServiceContext = ServiceContext(token = "", requestId = ServiceContext.newRequestId())
+    Http
     .collectM[Request] { case req@Method.POST -> Root / "bootes" / "v1" / "login" =>
-      implicit val serviceContext: ServiceContext = ServiceContext(token = "", requestId = ServiceContext.newRequestId())
       for {
         _ <- log.locally(CorrelationId(serviceContext.requestId).andThen(DebugJsonLog(serviceContext.toString)))(
-          log.debug("Extracting login payload for checking the credentials")
+          log.info("Extracting login payload for checking the credentials")
         )
         loginRequest <- extractBodyFromJson[LoginRequest](req)
         authenticatedUser <- {
@@ -213,11 +216,12 @@ object AuthenticationApp extends RequestOps {
       }
     }
     .catchAll {
-      case FailedLogin(user) =>
-      Http.fail(HttpError.Unauthorized(s"Failed login for user: $user."))
+      case FailedLogin(user, message, code) =>
+        Http.fail(HttpError.Unauthorized(s"Failed login for user: $user."))
       case ex @ _ =>
         Http.fail(HttpError.Unauthorized(s"Login Failed with error, ${ex.toString}"))
     }
+  }
 
   def getLoginUrl(configValue: KeycloakConfig, request: LoginRequest): String = {
     request.clientId match {
@@ -232,14 +236,18 @@ object AuthenticationApp extends RequestOps {
     val apiLoginRequest = if (request.isAdminCli) ApiLoginRequest.getLoginRequest(request.clientId.getOrElse("")).copy(username = ApiLoginRequest.default.username, password = ApiLoginRequest.default.password) else ApiLoginRequest.getLoginRequest(request.clientId.getOrElse("")).copy(username = request.username, password = request.password)
     val r: ZIO[Logging with Clock with system.System, Object, ApiToken] = for {
       _ <- log.locally(CorrelationId(serviceContext.requestId).andThen(DebugJsonLog(request.username)))(
-        log.debug("Performing login credentials validation")
+        log.info("Performing login credentials validation")
       )
       configValue <- keycloakConfigValue
       url = getLoginUrl(configValue, request)
       maybeToken <- {
-        ZSttpClient.login(url, Some(apiLoginRequest)).mapError(e => FailedLogin(s"${e.toString}"))
+        ZSttpClient.login(url, Some(apiLoginRequest)).mapError(e => {
+          println(e.toString)
+          FailedLogin(request.username, s"${e.toString}")
+        })
       }
       value <- {
+        println(maybeToken)
         maybeToken match {
           case Right(tokenObject) =>
             log.locally(CorrelationId(serviceContext.requestId).andThen(DebugJsonLog(request.username)))(
@@ -247,14 +255,19 @@ object AuthenticationApp extends RequestOps {
             ) &>
               ZIO.succeed(tokenObject.copy(requestId = Some(serviceContext.requestId.toString)))
           case Left(error) =>
+            println(s"Final error = $error")
             log.locally(CorrelationId(serviceContext.requestId).andThen(DebugJsonLog(request.username)))(
               log.info(s"Login failed: $error")
             ) &>
-            ZIO.fail(FailedLogin(error))
+            ZIO.fail(FailedLogin(request.username, error))
         }
       }
     } yield value
-    r.mapError(e => FailedLogin(s"${e.toString}"))
+    r.mapError(e => {
+      println(s"e = $e")
+      val is401 = e.toString.contains("error") && e.toString.contains("invalid_grant")
+      if (is401) FailedLogin(request.username, "Invalid Login", 401) else FailedLogin(request.username, e.toString)
+    })
   }
 
   def validateLogin(request: LoginRequest)(implicit serviceContext: ServiceContext): ZIO[Logging with Clock with system.System, FailedLogin, AuthenticatedUser] = {
@@ -275,18 +288,18 @@ object AuthenticationApp extends RequestOps {
       configValue <- keycloakConfigValue
       url = getTokenValidityCheckUrl(configValue, false)
       maybeToken <- {
-        ZSttpClient.postOrPut(methodType = "post", url, request, classOf[ApiToken], FormUrlEncoded).mapError(e => FailedLogin(s"${e.toString}"))
+        ZSttpClient.postOrPut(methodType = "post", url, request, classOf[ApiToken], FormUrlEncoded).mapError(e => FailedLogin("", s"${e.toString}"))
       }
       value <- {
         maybeToken match {
           case Right(tokenObject) =>
             ZIO.succeed(tokenObject.copy(access_token = Some(token.value), requestId = Some(serviceContext.requestId.toString)))
           case Left(error) =>
-            ZIO.fail(FailedLogin(error))
+            ZIO.fail(FailedLogin("", error))
         }
       }
     } yield value
-    r.mapError(e => FailedLogin(s"${e.toString}"))
+    r.mapError(e => FailedLogin("", s"${e.toString}"))
   }
 }
 

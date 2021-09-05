@@ -8,7 +8,9 @@ import com.bootes.server.UserServer.{CorrelationId, DebugJsonLog}
 import com.bootes.server.{RequestOps, UserServer}
 import com.bootes.server.auth.ApiLoginRequest.{clientId, clientSecret, requestedPassword, requestedUsername}
 import com.bootes.server.auth.keycloak.KeycloakClientExample
+import io.netty.buffer.Unpooled
 import pdi.jwt.{Jwt, JwtAlgorithm, JwtClaim, JwtOptions}
+import zhttp.core.ByteBuf
 import zhttp.http._
 import zio.clock.Clock
 import zio.json.{DeriveJsonCodec, EncoderOps, JsonCodec}
@@ -16,6 +18,7 @@ import zio.logging.{Logging, log}
 import zio.{IO, ZIO, system}
 
 import java.util.UUID
+import scala.runtime.Nothing$
 
 case class Token(value: String) extends AnyVal
 object Token {
@@ -209,7 +212,9 @@ object AuthenticationApp extends RequestOps {
         authenticatedUser <- {
           validateLogin(loginRequest)
         }
-        jwtClaim <- ZIO.effect(authenticatedUser.copy(username = loginRequest.username))
+        jwtClaim <- {
+          ZIO.effect(authenticatedUser.copy(username = loginRequest.username))
+        }
       } yield {
         //println(s"CLAIM: $jwtClaim")
         Response.jsonString(jwtClaim.toJson)
@@ -217,7 +222,9 @@ object AuthenticationApp extends RequestOps {
     }
     .catchAll {
       case FailedLogin(user, message, code) =>
-        Http.fail(HttpError.Unauthorized(s"Failed login for user: $user."))
+        //Http.fail(HttpError.Unauthorized(s"Failed login for user: $user."))
+        val msg = s"Failed login for user: $user."
+        Http.fromEffect(ZIO.succeed(Response.HttpResponse(Status.UNAUTHORIZED, List.empty, HttpData.fromByteBuf(Unpooled.wrappedBuffer(msg.getBytes)))))
       case ex @ _ =>
         Http.fail(HttpError.Unauthorized(s"Login Failed with error, ${ex.toString}"))
     }
@@ -242,12 +249,10 @@ object AuthenticationApp extends RequestOps {
       url = getLoginUrl(configValue, request)
       maybeToken <- {
         ZSttpClient.login(url, Some(apiLoginRequest)).mapError(e => {
-          println(e.toString)
           FailedLogin(request.username, s"${e.toString}")
         })
       }
       value <- {
-        println(maybeToken)
         maybeToken match {
           case Right(tokenObject) =>
             log.locally(CorrelationId(serviceContext.requestId).andThen(DebugJsonLog(request.username)))(
@@ -255,7 +260,6 @@ object AuthenticationApp extends RequestOps {
             ) &>
               ZIO.succeed(tokenObject.copy(requestId = Some(serviceContext.requestId.toString)))
           case Left(error) =>
-            println(s"Final error = $error")
             log.locally(CorrelationId(serviceContext.requestId).andThen(DebugJsonLog(request.username)))(
               log.info(s"Login failed: $error")
             ) &>
@@ -264,7 +268,6 @@ object AuthenticationApp extends RequestOps {
       }
     } yield value
     r.mapError(e => {
-      println(s"e = $e")
       val is401 = e.toString.contains("error") && e.toString.contains("invalid_grant")
       if (is401) FailedLogin(request.username, "Invalid Login", 401) else FailedLogin(request.username, e.toString)
     })

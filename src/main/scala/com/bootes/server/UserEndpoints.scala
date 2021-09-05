@@ -51,6 +51,10 @@ object UserEndpoints extends RequestOps {
             request <- extractBodyFromJson[CreateUserRequest](req)
             user <- UserService.update(UUID.fromString(id), request)
           } yield Response.jsonString(user.toJson)
+        case req @ Method.DELETE -> Root / "bootes" / "v1" / "users" / id =>
+          for {
+            user <- UserService.delete(UUID.fromString(id))
+          } yield Response.jsonString(user.toJson)
         case req@Method.POST -> Root / "bootes" / "v1" / "users" =>
           for {
             request <- extractBodyFromJson[CreateUserRequest](req)

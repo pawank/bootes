@@ -38,7 +38,7 @@ trait HttpClient {
   def get[T <: (Product with Serializable), U <: (Product with Serializable)](url: String, inputRequest: T, successType: Class[U], formType: FormType = FormUsingJson, queryParams: Option[QueryParams] = None)(implicit serviceContext: ServiceContext, encoder: JsonEncoder[T], decoder: JsonDecoder[U], printRecordsNo: Int = 1): ZIO[SttpClient with Logging, Serializable, Either[String, U]] = {
     for {
       _ <- log.locally(CorrelationId(serviceContext.requestId).andThen(DebugJsonLog(serviceContext.toString)))(
-        log.debug(s"GET: $url")
+        log.info(s"GET: $url")
       )
       res          <- {
         import sttp.client3._
@@ -46,7 +46,7 @@ trait HttpClient {
         val payload = inputRequest.toJson
         val uri = uri"${url}?${QueryParams.makeUri(queryParams, false)}"
         log.locally(CorrelationId(serviceContext.requestId).andThen(DebugJsonLog(payload)))(
-          log.debug(s"GET $url and uri = $uri")
+          log.info(s"GET $url and uri = $uri")
         )
         val req = serviceContext.token match {
           case "" => {
@@ -65,16 +65,16 @@ trait HttpClient {
             case true =>
               r.body match {
                 case Right(data) =>
-                  println(s"GET data = $data")
+                  //println(s"GET data = $data")
                   val xs = data.fromJson[U]
                   log.locally(CorrelationId(serviceContext.requestId).andThen(DebugJsonLog(if (xs.isLeft) xs.left.toOption.getOrElse("Error in getting error projection of the response") else "JSON fetched and prepared from the response")))(
-                    log.debug(s"${r.code} Received response for $url")
+                    log.info(s"${r.code} Received response for $url")
                   ) &> {
                     ZIO.succeed(xs)
                   }
                 case Left(error) =>
                   log.locally(CorrelationId(serviceContext.requestId).andThen(DebugJsonLog(res.toString)))(
-                    log.debug(s"${r.code} Received error $error for $url")
+                    log.error(s"${r.code} Received error $error for $url")
                   ) &>
                     ZIO.fail(Left(error))
               }
@@ -82,12 +82,12 @@ trait HttpClient {
               r.body match {
                 case Right(data) =>
                   log.locally(CorrelationId(serviceContext.requestId).andThen(DebugJsonLog(res.toString)))(
-                    log.debug(s"${r.code} Received response $data for $url")
+                    log.info(s"${r.code} Received response $data for $url")
                   ) &>
                     ZIO.fail(data)
                 case Left(error) =>
                   log.locally(CorrelationId(serviceContext.requestId).andThen(DebugJsonLog(res.toString)))(
-                    log.debug(s"${r.code} Received error $error for $url")
+                    log.error(s"${r.code} Received error $error for $url")
                   ) &>
                     ZIO.fail(Left(error))
               }
@@ -100,14 +100,14 @@ trait HttpClient {
   def getCollection[T <: (Product with Serializable), U <: (Product with Serializable)](url: String, inputRequest: T, successType: Class[List[U]], formType: FormType)(implicit serviceContext: ServiceContext, encoder: JsonEncoder[T], decoder: JsonDecoder[U], printRecordsNo: Int = 1): ZIO[SttpClient with Logging with Clock, Serializable, Either[String, List[U]]] = {
     for {
       _ <- log.locally(CorrelationId(serviceContext.requestId).andThen(DebugJsonLog(serviceContext.toString)))(
-        log.debug(s"GET: Getting collection from $url")
+        log.info(s"GET: Getting collection from $url")
       )
       res          <- {
         import sttp.client3._
         import scala.concurrent.duration._
         val payload = inputRequest.toJson
         log.locally(CorrelationId(serviceContext.requestId).andThen(DebugJsonLog(payload)))(
-          log.debug(s"GET $url as $formType")
+          log.info(s"GET $url as $formType")
         )
         val req = serviceContext.token match {
           case "" =>
@@ -126,13 +126,13 @@ trait HttpClient {
                 case Right(data) =>
                   val xs = data.fromJson[List[U]]
                   log.locally(CorrelationId(serviceContext.requestId).andThen(DebugJsonLog(if (xs.isLeft) xs.left.toOption.getOrElse("Error in getting error projection of the response") else "JSON prepared from the collection response")))(
-                    log.debug(s"${r.code} Received response for $url")
+                    log.info(s"${r.code} Received response for $url")
                   ) &> {
                     ZIO.succeed(xs)
                   }
                 case Left(error) =>
                   log.locally(CorrelationId(serviceContext.requestId).andThen(DebugJsonLog(res.toString)))(
-                    log.debug(s"${r.code} Received error $error for $url")
+                    log.error(s"${r.code} Received error $error for $url")
                   ) &>
                     ZIO.fail(Left(error))
               }
@@ -140,12 +140,12 @@ trait HttpClient {
               r.body match {
                 case Right(data) =>
                   log.locally(CorrelationId(serviceContext.requestId).andThen(DebugJsonLog(res.toString)))(
-                    log.debug(s"${r.code} Received response $data for $url")
+                    log.info(s"${r.code} Received response $data for $url")
                   ) &>
                     ZIO.fail(data)
                 case Left(error) =>
                   log.locally(CorrelationId(serviceContext.requestId).andThen(DebugJsonLog(res.toString)))(
-                    log.debug(s"${r.code} Received error $error for $url")
+                    log.error(s"${r.code} Received error $error for $url")
                   ) &>
                     ZIO.fail(Left(error))
               }
@@ -158,7 +158,7 @@ trait HttpClient {
   def postOrPut[T <: (Product with Serializable), U <: (Product with Serializable)](methodType: String, url: String, inputRequest: T, successType: Class[U], formType: FormType)(implicit serviceContext: ServiceContext, encoder: JsonEncoder[T], decoder: JsonDecoder[U]): ZIO[Logging with Clock, Serializable, Either[String, U]] = {
     for {
       _ <- log.locally(CorrelationId(serviceContext.requestId).andThen(DebugJsonLog(serviceContext.toString)))(
-        log.debug(s"POST: $url")
+        log.info(s"postOrPut: $url with method type, $methodType")
       )
       res          <- {
         getRateLimiter.use { rateLimiter =>
@@ -173,7 +173,7 @@ trait HttpClient {
                 val payload = com.bootes.utils.getCCParams(inputRequest)
                 //println(s"payload = $payload")
                 log.locally(CorrelationId(serviceContext.requestId).andThen(DebugJsonLog(payload.mkString)))(
-                  log.debug(s"POST $url as $formType")
+                  log.info(s"$url as $formType with method type, $methodType")
                 )
                 serviceContext.token match {
                   case "" =>
@@ -186,6 +186,7 @@ trait HttpClient {
                   case _ =>
                     methodType match {
                       case "put" =>
+                        println(s"PUT\n\n")
                         basicRequest.auth.bearer(serviceContext.token).body(payload, "utf-8").put(uri"$url").readTimeout(serviceContext.readTimeout)
                       case _ =>
                         basicRequest.auth.bearer(serviceContext.token).body(payload, "utf-8").post(uri"$url").readTimeout(serviceContext.readTimeout)
@@ -195,15 +196,19 @@ trait HttpClient {
                 val payload = inputRequest.toJson
                 //println(s"JSON payload = $payload")
                 log.locally(CorrelationId(serviceContext.requestId).andThen(DebugJsonLog(payload)))(
-                  log.debug(s"POST $url as $formType")
+                  log.info(s"$url as $formType with method type, $methodType")
                 )
-                basicRequest.contentType("application/json").auth.bearer(serviceContext.token).body(payload).post(uri"$url")
+                methodType match {
+                  case "put" =>
+                    basicRequest.contentType("application/json").auth.bearer(serviceContext.token).body(payload).put(uri"$url")
+                  case _ =>
+                    basicRequest.contentType("application/json").auth.bearer(serviceContext.token).body(payload).post(uri"$url")
+                }
             }
             //val res: Task[Response[Either[String, String]]] = req.send(sttp.client3.logging.slf4j.Slf4jLoggingBackend(delegate = backend, logRequestHeaders = false, sensitiveHeaders = Set("Authorization")))
             val res: Task[Response[Either[String, String]]] = req.send(sttp.client3.logging.scribe.ScribeLoggingBackend(delegate = backend, logRequestHeaders = false, sensitiveHeaders = Set("Authorization")))
             res.flatMap(r => {
               val statusCode = r.code.code >= 200 && r.code.code < 300
-              println(r)
               r.body match {
                 case Right(data) =>
                   val xs = r.code.code match {
@@ -221,7 +226,7 @@ trait HttpClient {
                   }
                 case Left(error) =>
                   log.locally(CorrelationId(serviceContext.requestId).andThen(DebugJsonLog(res.toString)))(
-                    log.debug(s"${r.code} Received error $error for $url")
+                    log.error(s"${r.code} Received error $error for $url")
                   ) &>
                   ZIO.fail(Left(error))
               }
@@ -232,6 +237,56 @@ trait HttpClient {
     } yield res
   }
 
+  def delete[T <: (Product with Serializable), U <: (Product with Serializable)](url: String, successType: Class[U])(implicit serviceContext: ServiceContext, decoder: JsonDecoder[U]): ZIO[Logging with Clock, Serializable, Either[String, U]] = {
+    for {
+      _ <- log.locally(CorrelationId(serviceContext.requestId).andThen(DebugJsonLog(serviceContext.toString)))(
+        log.info(s"Delete: $url")
+      )
+      res          <- {
+        getRateLimiter.use { rateLimiter =>
+          import sttp.client3._
+          import sttp.client3.asynchttpclient.zio.AsyncHttpClientZioBackend
+          import scala.concurrent.duration._
+          val options = SttpBackendOptions.connectionTimeout(1.minute)
+          AsyncHttpClientZioBackend.managed(options = options).use { backend =>
+                val req = serviceContext.token match {
+                  case "" =>
+                        basicRequest.delete(uri"$url").readTimeout(serviceContext.readTimeout)
+                  case _ =>
+                        basicRequest.auth.bearer(serviceContext.token).delete(uri"$url").readTimeout(serviceContext.readTimeout)
+                }
+            //val res: Task[Response[Either[String, String]]] = req.send(sttp.client3.logging.slf4j.Slf4jLoggingBackend(delegate = backend, logRequestHeaders = false, sensitiveHeaders = Set("Authorization")))
+            val res: Task[Response[Either[String, String]]] = req.send(sttp.client3.logging.scribe.ScribeLoggingBackend(delegate = backend, logRequestHeaders = false, sensitiveHeaders = Set("Authorization")))
+            res.flatMap(r => {
+              val statusCode = r.code.code >= 200 && r.code.code < 300
+              r.body match {
+                case Right(data) =>
+                  //println(s"DELETE data = $data")
+                  val xs = r.code.code match {
+                    case 201 =>
+                      """{"message":"Created"}""".fromJson[U]
+                    case 204 =>
+                      """{"message":"Resource Deleted Successfully"}""".fromJson[U]
+                    case _ =>
+                      data.fromJson[U]
+                  }
+                  log.locally(CorrelationId(serviceContext.requestId).andThen(DebugJsonLog(if (xs.isLeft) xs.left.toOption.getOrElse("Error in getting error projection of the response") else "JSON prepared from the response")))(
+                    log.debug(s"${r.code} Received response and parsing successful for $url")
+                  ) &> {
+                    ZIO.succeed(xs)
+                  }
+                case Left(error) =>
+                  log.locally(CorrelationId(serviceContext.requestId).andThen(DebugJsonLog(res.toString)))(
+                    log.error(s"${r.code} Received error $error for $url")
+                  ) &>
+                    ZIO.fail(Left(error))
+              }
+            })
+          }
+        }
+      }
+    } yield res
+  }
 }
 
 object ZSttpClient extends App with HttpClient {

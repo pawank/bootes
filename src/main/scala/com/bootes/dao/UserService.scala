@@ -188,6 +188,7 @@ trait UserService {
   def get(id: UUID)(implicit ctx: ServiceContext): Task[User]
   def get(code: String)(implicit ctx: ServiceContext): Task[User]
   def getByEmail(email: String)(implicit ctx: ServiceContext): Task[User]
+  def delete(id: UUID)(implicit ctx: ServiceContext): Task[String]
   def logout(id: String, inputRequest: LogoutRequest)(implicit ctx: ServiceContext): Task[ResponseMessage]
 }
 
@@ -220,6 +221,8 @@ case class UserServiceLive(repository: UserRepository, console: Console.Service)
 
   override def getByEmail(email: String)(implicit ctx: ServiceContext): Task[User] = repository.findByEmail(email)
 
+  override def delete(id: UUID)(implicit ctx: ServiceContext): Task[String] = ???
+
   def logout(id: String, inputRequest: LogoutRequest)(implicit ctx: ServiceContext): Task[ResponseMessage] = Task.succeed(ResponseMessage.makeSuccess(200, ""))
 }
 case class KeycloakUserServiceLive(console: Console.Service) extends UserService {
@@ -230,25 +233,25 @@ case class KeycloakUserServiceLive(console: Console.Service) extends UserService
     ???
   }
 
-  override def upsert(request: CreateUserRequest, methodType:Option[String] = Some("post"))(implicit serviceContext: ServiceContext): ZIO[Any, Serializable, User] = {
+  override def upsert(request: CreateUserRequest, methodType:Option[String])(implicit serviceContext: ServiceContext): ZIO[Any, Serializable, User] = {
     val inputRequest = CreateUserRequest.toKeycloakUser(request)
       val result = for {
       configValue <- keycloakConfigValue
       _ <- log.locally(CorrelationId(serviceContext.requestId).andThen(DebugJsonLog(configValue.toString)))(
-                                                                                                log.debug(s"Loaded config")
+                                                                                                log.info(s"Loaded config")
                                                                                                 )
       url = s"${configValue.keycloak.url}/${configValue.keycloak.adminUsername}/realms/${configValue.keycloak.realm.getOrElse("")}/users"
       res <- {
         methodType match {
-          case Some(m)  if m.equalsIgnoreCase("put") =>
+          case Some(m) =>
             val url = s"${configValue.keycloak.url}/${configValue.keycloak.adminUsername}/realms/${configValue.keycloak.realm.getOrElse("")}/users/${request.id.getOrElse(UUID.randomUUID.toString).toString}"
             log.locally(CorrelationId(serviceContext.requestId).andThen(DebugJsonLog(url)))(
-              log.debug(s"Upsert call to $url with method = $methodType")
+              log.info(s"Upsert call to $url with method = $methodType")
             ) &>
-            ZSttpClient.postOrPut("put", url, inputRequest, classOf[ApiResponseSuccess], FormUsingJson)
+            ZSttpClient.postOrPut(m.toLowerCase, url, inputRequest, classOf[ApiResponseSuccess], FormUsingJson)
           case _ =>
             log.locally(CorrelationId(serviceContext.requestId).andThen(DebugJsonLog(url)))(
-              log.debug(s"Upsert call to $url with method = $methodType")
+              log.info(s"Default Upsert call to $url with method = $methodType")
             ) &>
             ZSttpClient.postOrPut("post", url, inputRequest, classOf[ApiResponseSuccess], FormUsingJson)
         }
@@ -257,16 +260,16 @@ case class KeycloakUserServiceLive(console: Console.Service) extends UserService
         res match {
           case Right(data) =>
             log.locally(CorrelationId(serviceContext.requestId).andThen(DebugJsonLog(data.toString)))(
-              log.debug(s"Got response for $url")
+              log.info(s"Got response for $url")
             ) &>
             ZIO.succeed(User.fromUserRecord(request).copy(id = None))
           case Left(data) =>
             log.locally(CorrelationId(serviceContext.requestId).andThen(DebugJsonLog(data)))(
-              log.debug(s"Error received for $url with response: $data")
+              log.error(s"Error received for $url with response: $data")
             ) &> {
               val error: String = data.fromJson[ApiResponseError].fold(s => s, c => c.errorMessage)
               log.locally(CorrelationId(serviceContext.requestId).andThen(DebugJsonLog(data)))(
-                log.debug(s"Error for $url")
+                log.error(s"Error for $url")
               ) &> ZIO.fail(error)
             }
         }
@@ -291,7 +294,7 @@ case class KeycloakUserServiceLive(console: Console.Service) extends UserService
     val result = for {
       configValue <- keycloakConfigValue
       _ <- log.locally(CorrelationId(serviceContext.requestId).andThen(DebugJsonLog(configValue.toString)))(
-        log.debug(s"Loaded config for getting all users")
+        log.info(s"Loaded config for getting all users")
       )
       //url = s"${configValue.keycloak.url}/${configValue.keycloak.adminUsername}/realms/${configValue.keycloak.realm.getOrElse("")}/users"
       url = s"${configValue.keycloak.url}/realms/${configValue.keycloak.masterRealm}/extended-api/realms/${configValue.keycloak.realm.getOrElse("")}/users"
@@ -307,7 +310,7 @@ case class KeycloakUserServiceLive(console: Console.Service) extends UserService
           case Left(data) =>
             val error: String = data.fromJson[ApiResponseError].fold(s => s, c => c.errorMessage)
             log.locally(CorrelationId(serviceContext.requestId).andThen(DebugJsonLog(data)))(
-              log.debug(s"Error, $error for $url")
+              log.error(s"Error, $error for $url")
             ) &>
               ZIO.succeed(List.empty)
         }
@@ -322,7 +325,7 @@ case class KeycloakUserServiceLive(console: Console.Service) extends UserService
     val result = for {
       configValue <- keycloakConfigValue
       _ <- log.locally(CorrelationId(serviceContext.requestId).andThen(DebugJsonLog(configValue.toString)))(
-        log.debug(s"Loaded config for getting user by id, $id")
+        log.info(s"Loaded config for getting user by id, $id")
       )
       url = s"${configValue.keycloak.url}/${configValue.keycloak.adminUsername}/realms/${configValue.keycloak.realm.getOrElse("")}/users/${id.toString}"
       res <- {
@@ -335,7 +338,7 @@ case class KeycloakUserServiceLive(console: Console.Service) extends UserService
           case Left(data) =>
             val error: String = data.fromJson[ApiResponseError].fold(s => s, c => c.errorMessage)
             log.locally(CorrelationId(serviceContext.requestId).andThen(DebugJsonLog(data)))(
-              log.debug(s"Error, $error for $url")
+              log.error(s"Error, $error for $url")
             ) &>
             ZIO.fail(error)
         }
@@ -350,12 +353,38 @@ case class KeycloakUserServiceLive(console: Console.Service) extends UserService
     upsert(request.copy(id = Some(id)), Some("put")).mapError(e => UserDoesNotExists(e.toString))
   }
 
+  override def delete(id: UUID)(implicit serviceContext: ServiceContext): Task[String] = {
+    val result = for {
+      configValue <- keycloakConfigValue
+      _ <- log.locally(CorrelationId(serviceContext.requestId).andThen(DebugJsonLog(configValue.toString)))(
+        log.info(s"Loaded config for deleting user by id, $id")
+      )
+      url = s"${configValue.keycloak.url}/${configValue.keycloak.adminUsername}/realms/${configValue.keycloak.realm.getOrElse("")}/users/${id.toString}"
+      res <- ZSttpClient.delete(url, classOf[ApiResponseSuccess])
+      output <- {
+        res match {
+          case Right(data) =>
+            ZIO.succeed(data.message)
+          case Left(data) =>
+            val error: String = data.fromJson[ApiResponseError].fold(s => s, c => c.errorMessage)
+            log.locally(CorrelationId(serviceContext.requestId).andThen(DebugJsonLog(data)))(
+              log.error(s"Error, $error for $url")
+            ) &>
+              ZIO.fail(error)
+        }
+      }
+    } yield output
+    result
+      .mapError(error => new RuntimeException(s"Error: $error") )
+      .provideLayer(AsyncHttpClientZioBackend.layer() ++ Clock.live ++ UserServer.logLayer ++ system.System.live)
+  }
+
   override def get(code: String)(implicit serviceContext: ServiceContext): Task[User] = {
 
     val result = for {
       configValue <- keycloakConfigValue
       _ <- log.locally(CorrelationId(serviceContext.requestId).andThen(DebugJsonLog(configValue.toString)))(
-        log.debug(s"Loaded config for getting user by id, $code")
+        log.info(s"Loaded config for getting user by id, $code")
       )
       url = s"${configValue.keycloak.url}/realms/${configValue.keycloak.masterRealm}/extended-api/realms/${configValue.keycloak.realm.getOrElse("")}/users"
       res <- {
@@ -369,7 +398,7 @@ case class KeycloakUserServiceLive(console: Console.Service) extends UserService
           case Left(data) =>
             val error: String = data.fromJson[ApiResponseError].fold(s => s, c => c.errorMessage)
             log.locally(CorrelationId(serviceContext.requestId).andThen(DebugJsonLog(data)))(
-              log.debug(s"Error, $error for $url")
+              log.error(s"Error, $error for $url")
             ) &>
               ZIO.fail(error)
         }
@@ -387,7 +416,7 @@ case class KeycloakUserServiceLive(console: Console.Service) extends UserService
     val result = for {
       configValue <- keycloakConfigValue
       _ <- log.locally(CorrelationId(serviceContext.requestId).andThen(DebugJsonLog(configValue.toString)))(
-        log.debug(s"Loaded config")
+        log.info(s"Loaded config")
       )
       url = s"${configValue.keycloak.url}/realms/${configValue.keycloak.realm.getOrElse("")}/protocol/openid-connect/logout"
       res <- {
@@ -397,13 +426,13 @@ case class KeycloakUserServiceLive(console: Console.Service) extends UserService
         res match {
           case Right(data) =>
             log.locally(CorrelationId(serviceContext.requestId).andThen(DebugJsonLog(data.toString)))(
-              log.debug(s"Got response for $url")
+              log.info(s"Got response for $url")
             ) &>
               ZIO.succeed(ResponseMessage(status = true, code = 200, message = "Logout done"))
           case Left(data) =>
             val error: String = data.fromJson[ApiResponseError].fold(s => s, c => c.errorMessage)
             log.locally(CorrelationId(serviceContext.requestId).andThen(DebugJsonLog(data)))(
-              log.debug(s"Error for $url")
+              log.error(s"Error for $url")
             ) &>
               ZIO.fail(error)
         }

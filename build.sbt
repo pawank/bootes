@@ -1,3 +1,5 @@
+import sbtassembly.AssemblyPlugin.defaultUniversalScript
+
 name := "bootes"
 
 version := "0.1"
@@ -79,8 +81,10 @@ lazy val app = (project in file("."))
   .settings(
     mainClass in (Compile, packageBin) := Some("com.bootes.server.UserServer"),
     assembly / mainClass := Some("com.bootes.server.UserServer"),
-    assembly / assemblyJarName := "bootes-v1.jar"
+    assembly / assemblyJarName := s"${name.value}-${version.value}"
 )
+
+ThisBuild / assemblyPrependShellScript := Some(defaultUniversalScript(shebang = false))
 
 ThisBuild / assemblyMergeStrategy := {
   case PathList("io", "netty", xs @ _*)         => MergeStrategy.first

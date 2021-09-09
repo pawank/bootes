@@ -18,10 +18,8 @@ import zio.logging.slf4j._
 import java.util.UUID
 
 object UserEndpoints extends RequestOps {
-  import com.github.mvv.zilog.{Logging => ZLogging, Logger => ZLogger, log => zlog}
-  implicit val logger: ZLogger = ZLogger[UserServer.type]
 
-  val user: ApiToken => Http[Has[UserService] with Console with Logging with ZLogging, HttpError, Request, UResponse] = jwtClaim => {
+  val user: ApiToken => Http[Has[UserService] with Console with Logging, HttpError, Request, UResponse] = jwtClaim => {
     scribe.debug(s"Claim found for ${jwtClaim.name}")
     Http
       .collectM[Request] {

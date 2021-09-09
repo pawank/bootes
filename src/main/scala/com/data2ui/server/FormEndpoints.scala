@@ -20,11 +20,8 @@ import zio.logging.slf4j._
 import java.util.UUID
 
 object FormEndpoints extends RequestOps {
-  import com.github.mvv.zilog.{Logging => ZLogging, Logger => ZLogger, log => zlog}
-  implicit val logger: ZLogger = ZLogger[UserServer.type]
 
-
-  val form: ApiToken => Http[Has[FormService] with Console with Logging with ZLogging, HttpError, Request, UResponse] = jwtClaim => {
+  val form: ApiToken => Http[Has[FormService] with Console with Logging, HttpError, Request, UResponse] = jwtClaim => {
     Http
       .collectM[Request] {
         case Method.GET -> Root / "columba" / "v1" / "forms" / "search" =>

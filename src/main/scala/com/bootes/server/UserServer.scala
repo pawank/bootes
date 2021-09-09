@@ -17,26 +17,10 @@ import zio.clock.Clock
 import zio.logging.{LogAnnotation, LogFormat, LogLevel}
 
 import java.util.UUID
-import com.github.mvv.sredded.StructuredMapping
-import com.github.mvv.sredded.generic.deriveStructured
-import com.github.mvv.sredded.StructuredMapping
-import com.github.mvv.sredded.generic.deriveStructured
-import com.github.mvv.zilog.{Logger => ZLogger, Logging => ZLogging}
 import zhttp.service.server.ServerChannelFactory
-import zio.config.derivation.name
 
-
-final case class ClientRequest(src: String, method: String, path: String)
-object ClientRequest {
-  implicit val structured: StructuredMapping[ClientRequest] = deriveStructured
-}
-object RequestKey extends ZLogging.Key[ClientRequest]("request")
-object CorrelationIdKey extends ZLogging.Key[String]("correlationId")
-object CustomerIdKey extends ZLogging.Key[Long]("customerId")
 
 object UserServer extends App {
-  implicit val logger: ZLogger = ZLogger[UserServer.type]
-
   final val CorrelationId: LogAnnotation[UUID] = LogAnnotation[UUID](
     name = "correlation-id",
     initialValue = UUID.randomUUID(),
@@ -69,13 +53,13 @@ object UserServer extends App {
     }
   }
 
-  val userEndpoints: Http[Has[UserService] with Clock with Console with Logging with ZLogging with system.System, HttpError, Request, Response[Has[UserService]  with Console with Logging with ZLogging, HttpError]] =
+  val userEndpoints: Http[Has[UserService] with Clock with Console with Logging with system.System, HttpError, Request, Response[Has[UserService]  with Console with Logging, HttpError]] =
     CORS(
       AuthenticationApp.authenticate(HttpApp.forbidden("Oops! You are not authorised to access the requested feature. Please check your credentials."), UserEndpoints.user),
       config = getCorsConfig()
     )
 
-  val formEndpoints: Http[Has[FormService] with Clock with Console with Logging with ZLogging with system.System, HttpError, Request, Response[Has[FormService] with Console with Logging with ZLogging, HttpError]] =
+  val formEndpoints: Http[Has[FormService] with Clock with Console with Logging with system.System, HttpError, Request, Response[Has[FormService] with Console with Logging, HttpError]] =
     CORS(
         AuthenticationApp.authenticate(HttpApp.forbidden("Oops! You are not authorised to access the requested feature. Please check your credentials."), FormEndpoints.form),
       config = getCorsConfig()
@@ -91,11 +75,10 @@ object UserServer extends App {
   val program: ZIO[Any, Throwable, Nothing] = {
     import sttp.client3._
     import sttp.client3.asynchttpclient.zio._
-    scribe.info("Starting bootes service..")
     //val app = getVersion(root) +++ AuthenticationApp.login +++ userEndpoints +++ formEndpoints
     val app = CORS(getVersion(root) +++ AuthenticationApp.login, config = getCorsConfig()) +++ userEndpoints +++ formEndpoints
     val server = Server.port(8080) ++ Server.app(app) ++ Server.maxRequestSize(4194304)
-    server.start.inject(ServerChannelFactory.auto, EventLoopGroup.auto(0), Console.live, ZioQuillContext.dataSourceLayer, OptionsRepository.layer, ValidationsRepository.layer, FormElementsRepository.layer, logLayer, Clock.live, ZLogging.consoleJson(), AsyncHttpClientZioBackend.layer(), UserService.layerKeycloakService, FormRepository.layer, FormService.layer, system.System.live)
+    server.start.inject(ServerChannelFactory.auto, EventLoopGroup.auto(0), Console.live, ZioQuillContext.dataSourceLayer, OptionsRepository.layer, ValidationsRepository.layer, FormElementsRepository.layer, logLayer, Clock.live, AsyncHttpClientZioBackend.layer(), UserService.layerKeycloakService, FormRepository.layer, FormService.layer, system.System.live)
   }
 
   override def run(args: List[String]): URIO[zio.ZEnv, ExitCode] = program.exitCode

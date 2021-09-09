@@ -43,6 +43,7 @@ libraryDependencies ++= Seq(
   "dev.zio"                       %% "zio-opentracing"          % zioOpenTracingVersion,
   "dev.zio"                       %% "zio-streams"              % zioVersion,
   "dev.zio"                       %% "zio-kafka"                % "0.16.0",
+  "dev.zio"                       %% "zio-zmx"                  % "0.0.8",
   "dev.zio"                       % "zio-json-interop-refined_2.13" % "0.2.0-M1",
   "io.d11"                        %% "zhttp"                    % zioHttpVersion,
   "io.getquill"                   %% "quill-jdbc-zio"           % quillVersion,

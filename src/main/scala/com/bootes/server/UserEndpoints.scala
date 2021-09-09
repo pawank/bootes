@@ -23,10 +23,10 @@ object UserEndpoints extends RequestOps {
 
   val user: ApiToken => Http[Has[UserService] with Console with Logging with ZLogging, HttpError, Request, UResponse] = jwtClaim => {
     scribe.debug(s"Claim found for ${jwtClaim.name}")
-    implicit val serviceContext: ServiceContext = ServiceContext(token = jwtClaim.access_token.getOrElse(""), requestId = UUID.fromString(jwtClaim.requestId.getOrElse("")))
     Http
       .collectM[Request] {
         case req @ Method.GET -> Root / "bootes" / "v1" / "users" =>
+          implicit val serviceContext: ServiceContext = getServiceContext(jwtClaim)
           for {
             //_ <- ZIO.succeed(scribe.info("Getting list of all users"))
             _ <- log.locally(CorrelationId(serviceContext.requestId).andThen(DebugJsonLog(serviceContext.toString)))(
@@ -43,24 +43,29 @@ object UserEndpoints extends RequestOps {
             }
           } yield Response.jsonString(users.toJson)
         case Method.GET -> Root / "bootes" / "v1" / "users" / id =>
+          implicit val serviceContext: ServiceContext = getServiceContext(jwtClaim)
           for {
             user <- UserService.get(UUID.fromString(id))
           } yield Response.jsonString(user.toJson)
         case req @ Method.PUT -> Root / "bootes" / "v1" / "users" / id =>
+          implicit val serviceContext: ServiceContext = getServiceContext(jwtClaim)
           for {
             request <- extractBodyFromJson[CreateUserRequest](req)
             user <- UserService.update(UUID.fromString(id), request)
           } yield Response.jsonString(user.toJson)
         case req @ Method.DELETE -> Root / "bootes" / "v1" / "users" / id =>
+          implicit val serviceContext: ServiceContext = getServiceContext(jwtClaim)
           for {
             user <- UserService.delete(UUID.fromString(id))
           } yield Response.jsonString(user.toJson)
         case req@Method.POST -> Root / "bootes" / "v1" / "users" =>
+          implicit val serviceContext: ServiceContext = getServiceContext(jwtClaim)
           for {
             request <- extractBodyFromJson[CreateUserRequest](req)
             results <- UserService.upsert(request, methodType = Some("post"))(serviceContext.copy(requestId = request.requestId.map(UUID.fromString(_)).getOrElse(serviceContext.requestId)))
           } yield Response.jsonString(results.toJson)
         case req@Method.POST -> Root / "bootes" / "v1" / "users" / "logout" =>
+          implicit val serviceContext: ServiceContext = getServiceContext(jwtClaim)
           for {
             request <- extractBodyFromJson[Token](req)
             results <- {
@@ -84,6 +89,7 @@ object UserEndpoints extends RequestOps {
 }
 
 trait RequestOps {
+  def getServiceContext(jwtClaim: ApiToken): ServiceContext = ServiceContext(token = jwtClaim.access_token.getOrElse(""), requestId = UUID.fromString(jwtClaim.requestId.getOrElse("")))
 
   def extractBodyFromJson[A](request: Request)(implicit codec: JsonCodec[A], serviceContext: ServiceContext): ZIO[Logging, Serializable, A] =
     for {

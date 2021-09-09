@@ -201,9 +201,9 @@ object AuthenticationApp extends RequestOps {
   }
 
   def login: Http[Logging with Clock with system.System, HttpError.Unauthorized, Request, UResponse] = {
-    implicit val serviceContext: ServiceContext = ServiceContext(token = "", requestId = ServiceContext.newRequestId())
     Http
     .collectM[Request] { case req@Method.POST -> Root / "bootes" / "v1" / "login" =>
+      implicit val serviceContext: ServiceContext = ServiceContext(token = "", requestId = ServiceContext.newRequestId())
       for {
         _ <- log.locally(CorrelationId(serviceContext.requestId).andThen(DebugJsonLog(serviceContext.toString)))(
           log.info("Extracting login payload for checking the credentials")
@@ -220,14 +220,14 @@ object AuthenticationApp extends RequestOps {
         Response.jsonString(jwtClaim.toJson)
       }
     }
-    .catchAll {
-      case FailedLogin(user, message, code) =>
-        //Http.fail(HttpError.Unauthorized(s"Failed login for user: $user."))
-        val msg = s"Failed login for user: $user."
-        Http.fromEffect(ZIO.succeed(Response.HttpResponse(Status.UNAUTHORIZED, List.empty, HttpData.fromByteBuf(Unpooled.wrappedBuffer(msg.getBytes)))))
-      case ex @ _ =>
-        Http.fail(HttpError.Unauthorized(s"Login Failed with error, ${ex.toString}"))
-    }
+      .catchAll {
+        case FailedLogin(user, message, code) =>
+          //Http.fail(HttpError.Unauthorized(s"Failed login for user: $user."))
+          val msg = s"Failed login for user: $user."
+          Http.fromEffect(ZIO.succeed(Response.HttpResponse(Status.UNAUTHORIZED, List.empty, HttpData.fromByteBuf(Unpooled.wrappedBuffer(msg.getBytes)))))
+        case ex@_ =>
+          Http.fail(HttpError.Unauthorized(s"Login Failed with error, ${ex.toString}"))
+      }
   }
 
   def getLoginUrl(configValue: KeycloakConfig, request: LoginRequest): String = {
@@ -247,11 +247,17 @@ object AuthenticationApp extends RequestOps {
       )
       configValue <- keycloakConfigValue
       url = getLoginUrl(configValue, request)
+      _ <- log.locally(CorrelationId(serviceContext.requestId).andThen(DebugJsonLog(request.username)))(
+        log.info(s"Sending login detail to url, $url for auth check")
+      )
       maybeToken <- {
         ZSttpClient.login(url, Some(apiLoginRequest)).mapError(e => {
           FailedLogin(request.username, s"${e.toString}")
         })
       }
+      _ <- log.locally(CorrelationId(serviceContext.requestId).andThen(DebugJsonLog(request.username)))(
+        log.info(s"Received login detail from url, $url for auth check")
+      )
       value <- {
         maybeToken match {
           case Right(tokenObject) =>

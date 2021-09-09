@@ -2,6 +2,7 @@ package com.data2ui.server
 
 import com.bootes.dao.keycloak.Models.ServiceContext
 import com.bootes.dao.repository.NotFoundException
+import com.bootes.server.UserEndpoints.getServiceContext
 import com.bootes.server.UserServer
 import com.bootes.server.UserServer.{CorrelationId, DebugJsonLog}
 import com.bootes.server.auth.{ApiToken, LogoutRequest, Token}
@@ -24,11 +25,10 @@ object FormEndpoints extends RequestOps {
 
 
   val form: ApiToken => Http[Has[FormService] with Console with Logging with ZLogging, HttpError, Request, UResponse] = jwtClaim => {
-    //scribe.debug(s"Claim found for ${jwtClaim.name}")
-    implicit val serviceContext: ServiceContext = ServiceContext(token = jwtClaim.access_token.getOrElse(""), requestId = UUID.fromString(jwtClaim.requestId.getOrElse("")))
     Http
       .collectM[Request] {
         case Method.GET -> Root / "columba" / "v1" / "forms" / "search" =>
+          implicit val serviceContext: ServiceContext = getServiceContext(jwtClaim)
           for {
             //_ <- ZIO.succeed(scribe.info("Getting list of all forms"))
             _ <- log.locally(CorrelationId(serviceContext.requestId).andThen(DebugJsonLog(serviceContext.toString)))(
@@ -37,6 +37,7 @@ object FormEndpoints extends RequestOps {
             forms <- FormService.all
           } yield Response.jsonString(forms.toJson)
         case Method.GET -> Root / "columba" / "v1" / "forms" / "template" / id =>
+          implicit val serviceContext: ServiceContext = getServiceContext(jwtClaim)
           for {
             user <- {
               //println(s"Form ID = $id")
@@ -44,6 +45,7 @@ object FormEndpoints extends RequestOps {
             }
           } yield Response.jsonString(user.toJson)
         case Method.GET -> Root / "columba" / "v1" / "forms" / id =>
+          implicit val serviceContext: ServiceContext = getServiceContext(jwtClaim)
           for {
             user <- {
               //println(s"Form ID = $id")
@@ -51,6 +53,7 @@ object FormEndpoints extends RequestOps {
             }
           } yield Response.jsonString(user.toJson)
         case req@Method.POST -> Root / "columba" / "v1" / "forms" =>
+          implicit val serviceContext: ServiceContext = getServiceContext(jwtClaim)
           for {
             request <- extractBodyFromJson[CreateFormRequest](req)
             results <- {
@@ -59,6 +62,7 @@ object FormEndpoints extends RequestOps {
             }
           } yield Response.jsonString(results.toJson)
         case req@Method.POST -> Root / "columba" / "v1" / "forms" / sectionName / stepNo =>
+          implicit val serviceContext: ServiceContext = getServiceContext(jwtClaim)
           for {
             request <- extractBodyFromJson[CreateFormRequest](req)
             results <- {

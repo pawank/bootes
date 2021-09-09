@@ -77,5 +77,25 @@ testFrameworks += new TestFramework("zio.test.sbt.ZTestFramework")
 
 lazy val app = (project in file("."))
   .settings(
-    assembly / mainClass := Some("com.bootes.server.UserServer")
+    mainClass in (Compile, packageBin) := Some("com.bootes.server.UserServer"),
+    assembly / mainClass := Some("com.bootes.server.UserServer"),
+    assembly / assemblyJarName := "bootes-v1.jar"
 )
+
+ThisBuild / assemblyMergeStrategy := {
+  case PathList("io", "netty", xs @ _*)         => MergeStrategy.first
+  case PathList("com", "fasterxml", xs @ _*)         => MergeStrategy.first
+  case PathList("org", "reactivestreams", xs @ _*)         => MergeStrategy.first
+  case PathList("ch", "qos", xs @ _*)         => MergeStrategy.first
+  case PathList("com", "outr", xs @ _*)         => MergeStrategy.first
+  case PathList(ps @ _*) if ps.last endsWith "io.netty.versions.properties" => MergeStrategy.last
+  case PathList(ps @ _*) if ps.last endsWith "module-info.class" => MergeStrategy.last
+  case PathList(ps @ _*) if ps.last endsWith "StaticLoggerBinder.class" => MergeStrategy.last
+  case PathList(ps @ _*) if ps.last endsWith "StaticMDCBinder.class" => MergeStrategy.last
+  case PathList(ps @ _*) if ps.last endsWith ".html" => MergeStrategy.first
+  case "application.conf"                            => MergeStrategy.concat
+  case "unwanted.txt"                                => MergeStrategy.discard
+  case x =>
+    val oldStrategy = (ThisBuild / assemblyMergeStrategy).value
+    oldStrategy(x)
+}

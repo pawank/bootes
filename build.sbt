@@ -82,6 +82,7 @@ libraryDependencies ++= Seq(
   "com.softwaremill.sttp.client3" %% "async-http-client-backend-zio" % sttpVersion,
   "com.softwaremill.sttp.client3" %% "slf4j-backend"            % "3.3.13",
   "com.softwaremill.sttp.client3" %% "scribe-backend" 		      % "3.3.13",
+  "com.softwaremill.sttp.client3" %% "zio-json"                 % "3.3.13",
   "com.github.jwt-scala"          %% "jwt-core"                 % "8.0.2",
   "org.postgresql"                 % "postgresql"               % "42.2.8",
   "ch.qos.logback"                 % "logback-classic"          % "1.2.3",

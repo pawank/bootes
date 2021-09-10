@@ -10,6 +10,9 @@ import com.bootes.tracking.JaegerTracer
 import com.data2ui.FormService
 import com.data2ui.repository.{FormElementsRepository, FormRepository, FormRepositoryLive, OptionsRepository, OptionsRepositoryLive, ValidationsRepository}
 import com.data2ui.server.FormEndpoints
+import io.opentelemetry.api.trace.SpanKind
+import io.opentelemetry.api.trace.propagation.W3CTraceContextPropagator
+import io.opentelemetry.context.propagation.{TextMapGetter, TextMapPropagator}
 import sttp.model.Uri
 import zhttp.http.{Response, _}
 import zhttp.service.{EventLoopGroup, Server}
@@ -25,7 +28,9 @@ import zhttp.service.server.ServerChannelFactory
 import zio.config.getConfig
 import zio.config.magnolia.{Descriptor, descriptor}
 import zio.config.typesafe.TypesafeConfig
+import zio.json.{DeriveJsonCodec, EncoderOps, JsonCodec}
 import zio.telemetry.opentelemetry.Tracing
+import zio.telemetry.opentelemetry.TracingSyntax.OpenTelemetryZioOps
 import zio.zmx.MetricSnapshot.Prometheus
 import zio.zmx._
 import zio.zmx.diagnostics._
@@ -33,7 +38,18 @@ import zio.zmx.metrics.{MetricAspect, MetricsSyntax}
 import zio.zmx.prometheus.PrometheusClient
 
 import java.io.IOException
+import java.lang
+import scala.jdk.CollectionConverters._
 
+final case class Status(name: String, status: String)
+
+object Status {
+  implicit val codec: JsonCodec[Status] = DeriveJsonCodec.gen[Status]
+
+  final def up(component: String): Status   = Status(component, status = "up")
+  final def down(component: String): Status = Status(component, status = "down")
+
+}
 
 object UserServer extends App {
   final val CorrelationId: LogAnnotation[UUID] = LogAnnotation[UUID](
@@ -80,6 +96,25 @@ object UserServer extends App {
       config = getCorsConfig()
     )
 
+  val propagator: TextMapPropagator       = W3CTraceContextPropagator.getInstance()
+  val getter: TextMapGetter[List[Header]] = new TextMapGetter[List[Header]] {
+    override def keys(carrier: List[Header]): lang.Iterable[String] =
+      carrier.map(_.name.toString).asJava
+
+    override def get(carrier: List[Header], key: String): String =
+      carrier.find(_.name.toString == key).map(_.value.toString).orNull
+  }
+  val routes: HttpApp[Tracing, Throwable] =
+    Http.collectM { case request @ Method.GET -> Root / "status" =>
+      val response = for {
+        _        <- Tracing.addEvent("event from backend before response")
+        response <- ZIO.succeed(Response.jsonString(Status.up("backend").toJson))
+        _        <- Tracing.addEvent("event from backend after response")
+      } yield response
+
+      response.spanFrom(propagator, request.headers, getter, "/status", SpanKind.SERVER)
+    }
+
   private lazy val metricsEndpoint = Http.collectM[Request] {
     case Method.GET -> Root / "metrics" =>
       PrometheusClient.snapshot.map { case Prometheus(value) => Response.text(value) }
@@ -106,11 +141,10 @@ object UserServer extends App {
 
     for {
       conf <- getConfig[AppConfig]
-      backendPort = conf.backend.host.port.getOrElse(8080)
+      backendPort = conf.backend.host.port.getOrElse(8000)
       _ <- putStrLn(s"Starting the server at port, $backendPort")
-      server = Server.port(backendPort) ++ Server.app(app) ++ Server.maxRequestSize(4194304)
-      //s <- server.start.inject(ServerChannelFactory.auto, EventLoopGroup.auto(0), Clock.live, JaegerTracer.live, Tracing.live, PrometheusClient.live, Console.live, ZioQuillContext.dataSourceLayer, OptionsRepository.layer, ValidationsRepository.layer, FormElementsRepository.layer, logLayer, AsyncHttpClientZioBackend.layer(), UserService.layerKeycloakService, FormRepository.layer, FormService.layer, system.System.live) @@ aspServerStartCountAll
-      s <- server.start.inject(ServerChannelFactory.auto, EventLoopGroup.auto(0), Clock.live, PrometheusClient.live, Console.live, ZioQuillContext.dataSourceLayer, OptionsRepository.layer, ValidationsRepository.layer, FormElementsRepository.layer, logLayer, AsyncHttpClientZioBackend.layer(), UserService.layerKeycloakService, FormRepository.layer, FormService.layer, system.System.live) @@ aspServerStartCountAll
+      server = Server.port(backendPort) ++ Server.app(app +++ routes) ++ Server.maxRequestSize(4194304)
+      s <- server.start.inject(ServerChannelFactory.auto, EventLoopGroup.auto(0), Clock.live, configLayer, JaegerTracer.live, Tracing.live, PrometheusClient.live, Console.live, ZioQuillContext.dataSourceLayer, OptionsRepository.layer, ValidationsRepository.layer, FormElementsRepository.layer, logLayer, AsyncHttpClientZioBackend.layer(), UserService.layerKeycloakService, FormRepository.layer, FormService.layer, system.System.live) @@ aspServerStartCountAll
       _ <- putStrLn(s"Shutting down the server at port, $backendPort")
     } yield s
   }

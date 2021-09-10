@@ -9,6 +9,7 @@ import io.opentelemetry.sdk.trace.SdkTracerProvider
 import io.opentelemetry.sdk.trace.export.SimpleSpanProcessor
 
 object JaegerTracer {
+  val TRACER_CLASSPATH = "com.bootes.tracking.JaegerTracer"
 
   def live: RLayer[Has[AppConfig], Has[Tracer]] =
     ZLayer.fromServiceM((conf: AppConfig) =>
@@ -17,7 +18,7 @@ object JaegerTracer {
         spanProcessor  <- UIO(SimpleSpanProcessor.create(spanExporter))
         tracerProvider <- UIO(SdkTracerProvider.builder().addSpanProcessor(spanProcessor).build())
         openTelemetry  <- UIO(OpenTelemetrySdk.builder().setTracerProvider(tracerProvider).build())
-        tracer         <- UIO(openTelemetry.getTracer("zio.telemetry.opentelemetry.example.JaegerTracer"))
+        tracer         <- UIO(openTelemetry.getTracer(TRACER_CLASSPATH))
       } yield tracer
     )
 

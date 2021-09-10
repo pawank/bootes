@@ -14,6 +14,8 @@ import zio.json._
 import zio.{Has, IO, UIO, ZIO}
 import zio.logging._
 import zio.logging.slf4j._
+import zio.telemetry.opentelemetry.Tracing
+
 import java.util.UUID
 
 object UserEndpoints extends RequestOps {

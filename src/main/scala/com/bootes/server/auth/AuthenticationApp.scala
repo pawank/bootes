@@ -15,6 +15,7 @@ import zhttp.http._
 import zio.clock.Clock
 import zio.json.{DeriveJsonCodec, EncoderOps, JsonCodec}
 import zio.logging.{Logging, log}
+import zio.zmx.metrics.{MetricAspect, MetricsSyntax}
 import zio.{IO, ZIO, system}
 
 import java.util.UUID
@@ -208,12 +209,12 @@ object AuthenticationApp extends RequestOps {
         _ <- log.locally(CorrelationId(serviceContext.requestId).andThen(DebugJsonLog(serviceContext.toString)))(
           log.info("Extracting login payload for checking the credentials")
         )
-        loginRequest <- extractBodyFromJson[LoginRequest](req)
+        loginRequest <- extractBodyFromJson[LoginRequest](req) @@ MetricAspect.count("loginCounter")
         authenticatedUser <- {
           validateLogin(loginRequest)
         }
         jwtClaim <- {
-          ZIO.effect(authenticatedUser.copy(username = loginRequest.username))
+          ZIO.effect(authenticatedUser.copy(username = loginRequest.username)) @@ MetricAspect.count("loginSuccessCounter")
         }
       } yield {
         //println(s"CLAIM: $jwtClaim")
@@ -224,7 +225,7 @@ object AuthenticationApp extends RequestOps {
         case FailedLogin(user, message, code) =>
           //Http.fail(HttpError.Unauthorized(s"Failed login for user: $user."))
           val msg = s"Failed login for user: $user."
-          Http.fromEffect(ZIO.succeed(Response.HttpResponse(Status.UNAUTHORIZED, List.empty, HttpData.fromByteBuf(Unpooled.wrappedBuffer(msg.getBytes)))))
+          Http.fromEffect(ZIO.succeed(Response.HttpResponse(Status.UNAUTHORIZED, List.empty, HttpData.fromByteBuf(Unpooled.wrappedBuffer(msg.getBytes)))) @@ MetricAspect.count("loginErrorCounter"))
         case ex@_ =>
           Http.fail(HttpError.Unauthorized(s"Login Failed with error, ${ex.toString}"))
       }

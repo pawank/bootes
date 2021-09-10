@@ -19,8 +19,11 @@ import zio.clock.Clock
 
 import java.util.UUID
 import zhttp.service.server.ServerChannelFactory
+import zio.zmx.MetricSnapshot.Prometheus
 import zio.zmx._
 import zio.zmx.diagnostics._
+import zio.zmx.metrics.{MetricAspect, MetricsSyntax}
+import zio.zmx.prometheus.PrometheusClient
 
 import java.io.IOException
 
@@ -70,6 +73,11 @@ object UserServer extends App {
       config = getCorsConfig()
     )
 
+  private lazy val metricsEndpoint = Http.collectM[Request] {
+    case Method.GET -> Root / "metrics" =>
+      PrometheusClient.snapshot.map { case Prometheus(value) => Response.text(value) }
+  }
+
   def checkAndAllowedOrigins(origin: String): Boolean = origin.equalsIgnoreCase("*")
 
   def getCorsConfig(): CORSConfig = {
@@ -77,16 +85,18 @@ object UserServer extends App {
     CORSConfig(anyOrigin = true, anyMethod = true, exposedHeaders = Some(Set("X-XSS-Protection", "X-Requested-With", "Content-Type", "Authorization", "Accept", "Origin")), allowedHeaders = Some(Set("X-Requested-With", "Content-Type", "Authorization", "Accept", "Origin")), allowedMethods = Some(Set(zhttp.http.Method.HEAD, zhttp.http.Method.PATCH, zhttp.http.Method.OPTIONS, zhttp.http.Method.GET, zhttp.http.Method.POST, zhttp.http.Method.PUT, zhttp.http.Method.DELETE)), allowedOrigins = checkAndAllowedOrigins)
   }
 
+  val aspServerStartCountAll = MetricAspect.count("serverRunAll")
+
   val program: ZIO[Any with Console, Throwable, Nothing] = {
     import sttp.client3._
     import sttp.client3.asynchttpclient.zio._
     val port = 8080
     //val app = getVersion(root) +++ AuthenticationApp.login +++ userEndpoints +++ formEndpoints
-    val app = CORS(getVersion(root) +++ AuthenticationApp.login, config = getCorsConfig()) +++ userEndpoints +++ formEndpoints
+    val app = CORS(getVersion(root) +++ metricsEndpoint +++ AuthenticationApp.login, config = getCorsConfig()) +++ userEndpoints +++ formEndpoints
     val server = Server.port(port) ++ Server.app(app) ++ Server.maxRequestSize(4194304)
     for {
       _ <- putStrLn(s"Starting the server at port, $port")
-      s <- server.start.inject(ServerChannelFactory.auto, EventLoopGroup.auto(0), Console.live, ZioQuillContext.dataSourceLayer, OptionsRepository.layer, ValidationsRepository.layer, FormElementsRepository.layer, logLayer, Clock.live, AsyncHttpClientZioBackend.layer(), UserService.layerKeycloakService, FormRepository.layer, FormService.layer, system.System.live)
+      s <- server.start.inject(ServerChannelFactory.auto, EventLoopGroup.auto(0), PrometheusClient.live, Console.live, ZioQuillContext.dataSourceLayer, OptionsRepository.layer, ValidationsRepository.layer, FormElementsRepository.layer, logLayer, Clock.live, AsyncHttpClientZioBackend.layer(), UserService.layerKeycloakService, FormRepository.layer, FormService.layer, system.System.live) @@ aspServerStartCountAll
       _ <- putStrLn(s"Shutting down the server at port, $port")
     } yield s
   }

@@ -4,15 +4,17 @@ import com.bootes.config.config.AppConfig
 import com.bootes.dao.keycloak.Models.ServiceContext
 import com.bootes.dao.{UserService, ZioQuillContext}
 import com.bootes.dao.repository.{NotFoundException, UserRepository}
-import com.bootes.server.UserServer.logLayer
+import com.bootes.server.UserServer.{getVersion, logLayer}
 import com.bootes.server.auth.AuthenticationApp
 import com.bootes.tracking.JaegerTracer
+import com.bootes.tracking.JaegerTracerUsingZipkin.makeService
 import com.data2ui.FormService
 import com.data2ui.repository.{FormElementsRepository, FormRepository, FormRepositoryLive, OptionsRepository, OptionsRepositoryLive, ValidationsRepository}
 import com.data2ui.server.FormEndpoints
 import io.opentelemetry.api.trace.SpanKind
 import io.opentelemetry.api.trace.propagation.W3CTraceContextPropagator
 import io.opentelemetry.context.propagation.{TextMapGetter, TextMapPropagator}
+import io.opentracing.propagation.TextMapAdapter
 import sttp.model.Uri
 import zhttp.http.{Response, _}
 import zhttp.service.{EventLoopGroup, Server}
@@ -31,11 +33,14 @@ import zio.config.typesafe.TypesafeConfig
 import zio.json.{DeriveJsonCodec, EncoderOps, JsonCodec}
 import zio.telemetry.opentelemetry.Tracing
 import zio.telemetry.opentelemetry.TracingSyntax.OpenTelemetryZioOps
+import zio.telemetry.opentracing.OpenTracing
 import zio.zmx.MetricSnapshot.Prometheus
 import zio.zmx._
 import zio.zmx.diagnostics._
 import zio.zmx.metrics.{MetricAspect, MetricsSyntax}
 import zio.zmx.prometheus.PrometheusClient
+import io.opentracing.propagation.Format.Builtin.{HTTP_HEADERS => HttpHeadersFormat}
+import zio.telemetry.opentracing._
 
 import java.io.IOException
 import java.lang
@@ -75,9 +80,10 @@ object UserServer extends App {
 
   val logLayer: TaskLayer[Logging] = ZEnv.live >>> logEnv
 
-  val root: Path = Root / "bootes" / "v1"
+  val rootPath: Path = Root / "bootes" / "v1"
+
   private def getVersion(root: Path):Http[Any, Nothing, Request, UResponse] = Http.collect[Request] {
-    case Method.GET -> `root` / "version" => {
+    case request @ Method.GET -> Root / "version" => {
       val version = "0.1"
       scribe.info(s"Service version = $version")
       Response.jsonString(s"""{"version": "$version"}""")
@@ -111,7 +117,6 @@ object UserServer extends App {
         response <- ZIO.succeed(Response.jsonString(Status.up("backend").toJson))
         _        <- Tracing.addEvent("event from backend after response")
       } yield response
-
       response.spanFrom(propagator, request.headers, getter, "/status", SpanKind.SERVER)
     }
 
@@ -133,18 +138,29 @@ object UserServer extends App {
     Descriptor[String].transformOrFailLeft(Uri.parse)(_.toString)
   val configLayer = TypesafeConfig.fromDefaultLoader(descriptor[AppConfig])
 
+  def status(service: ZLayer[Clock, Throwable, OpenTracing]): HttpApp[Clock, Throwable] =
+    Http.collectM { case request @ Method.GET -> Root / "status" =>
+      val headers = request.headers.map(h => h.name.toString -> h.value.toString).toMap
+      ZIO.unit
+        .spanFrom(HttpHeadersFormat, new TextMapAdapter(headers.asJava), "/status")
+        .as(Response.jsonString(Status.up("backend").toJson))
+        .inject(service, Clock.live)
+    }
+
   val program: ZIO[Any with Console with Has[AppConfig], Throwable, Nothing] = {
     import sttp.client3._
     import sttp.client3.asynchttpclient.zio._
     //val port = 8080
-    val app = CORS(getVersion(root) +++ metricsEndpoint +++ AuthenticationApp.login, config = getCorsConfig()) +++ userEndpoints +++ formEndpoints
+    val app = CORS(metricsEndpoint +++ AuthenticationApp.login, config = getCorsConfig()) +++ userEndpoints +++ formEndpoints
 
     for {
       conf <- getConfig[AppConfig]
       backendPort = conf.backend.host.port.getOrElse(8000)
+      service = makeService(conf.zipkinTracer.host, "bootes")
       _ <- putStrLn(s"Starting the server at port, $backendPort")
-      server = Server.port(backendPort) ++ Server.app(app +++ routes) ++ Server.maxRequestSize(4194304)
-      s <- server.start.inject(ServerChannelFactory.auto, EventLoopGroup.auto(0), Clock.live, configLayer, JaegerTracer.live, Tracing.live, PrometheusClient.live, Console.live, ZioQuillContext.dataSourceLayer, OptionsRepository.layer, ValidationsRepository.layer, FormElementsRepository.layer, logLayer, AsyncHttpClientZioBackend.layer(), UserService.layerKeycloakService, FormRepository.layer, FormService.layer, system.System.live) @@ aspServerStartCountAll
+      server = Server.port(backendPort) ++ Server.app(status(service) +++ getVersion(rootPath) +++ app) ++ Server.maxRequestSize(4194304)
+      s <- server.start.inject(ServerChannelFactory.auto, EventLoopGroup.auto(0), Clock.live, PrometheusClient.live, Console.live, ZioQuillContext.dataSourceLayer, OptionsRepository.layer, ValidationsRepository.layer, FormElementsRepository.layer, logLayer, AsyncHttpClientZioBackend.layer(), UserService.layerKeycloakService, FormRepository.layer, FormService.layer, system.System.live) @@ aspServerStartCountAll
+      //s <- server.start.inject(ServerChannelFactory.auto, EventLoopGroup.auto(0), Clock.live, configLayer, JaegerTracer.live, Tracing.live, PrometheusClient.live, Console.live, ZioQuillContext.dataSourceLayer, OptionsRepository.layer, ValidationsRepository.layer, FormElementsRepository.layer, logLayer, AsyncHttpClientZioBackend.layer(), UserService.layerKeycloakService, FormRepository.layer, FormService.layer, system.System.live) @@ aspServerStartCountAll
       _ <- putStrLn(s"Shutting down the server at port, $backendPort")
     } yield s
   }

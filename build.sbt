@@ -121,7 +121,7 @@ lazy val app = (project in file("."))
   .settings(
     mainClass in (Compile, packageBin) := Some("com.bootes.server.UserServer"),
     assembly / mainClass := Some("com.bootes.server.UserServer"),
-    assembly / assemblyJarName := s"${name.value}-${version.value}"
+    assembly / assemblyJarName := s"${name.value}-${version.value}.jar"
 )
 
 ThisBuild / assemblyPrependShellScript := Some(defaultUniversalScript(shebang = false))
@@ -132,7 +132,11 @@ ThisBuild / assemblyMergeStrategy := {
   case PathList("org", "reactivestreams", xs @ _*)         => MergeStrategy.first
   case PathList("ch", "qos", xs @ _*)         => MergeStrategy.first
   case PathList("com", "outr", xs @ _*)         => MergeStrategy.first
+  case PathList("javax", "annotation", xs @ _*)         => MergeStrategy.first
+  case PathList("org", "apache", "tomcat-annotations-api", xs @ _*)         => MergeStrategy.first
   case PathList(ps @ _*) if ps.last endsWith "io.netty.versions.properties" => MergeStrategy.last
+  case PathList(ps @ _*) if ps.last endsWith "native-image.properties" => MergeStrategy.last
+  case PathList(ps @ _*) if ps.last endsWith "reflection-config.json" => MergeStrategy.last
   case PathList(ps @ _*) if ps.last endsWith "module-info.class" => MergeStrategy.last
   case PathList(ps @ _*) if ps.last endsWith "StaticLoggerBinder.class" => MergeStrategy.last
   case PathList(ps @ _*) if ps.last endsWith "StaticMDCBinder.class" => MergeStrategy.last

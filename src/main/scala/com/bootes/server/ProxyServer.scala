@@ -21,7 +21,8 @@ object ProxyServer extends App {
 
   val server =
     getConfig[AppConfig].flatMap { conf =>
-      val port = conf.proxy.host.port.getOrElse(9090)
+      val port = conf.proxy.host.port.getOrElse(8008)
+      println(s"Starting proxy server on port, $port")
       (Server.port(port) ++ Server.app(ProxyApp.routes)).make.use(_ =>
         putStrLn(s"ProxyServer started on port $port") *> ZIO.never
       )

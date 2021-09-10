@@ -1,13 +1,16 @@
 package com.bootes.server
 
+import com.bootes.config.config.AppConfig
 import com.bootes.dao.keycloak.Models.ServiceContext
 import com.bootes.dao.{UserService, ZioQuillContext}
 import com.bootes.dao.repository.{NotFoundException, UserRepository}
 import com.bootes.server.UserServer.logLayer
 import com.bootes.server.auth.AuthenticationApp
+import com.bootes.tracking.JaegerTracer
 import com.data2ui.FormService
 import com.data2ui.repository.{FormElementsRepository, FormRepository, FormRepositoryLive, OptionsRepository, OptionsRepositoryLive, ValidationsRepository}
 import com.data2ui.server.FormEndpoints
+import sttp.model.Uri
 import zhttp.http.{Response, _}
 import zhttp.service.{EventLoopGroup, Server}
 import zio._
@@ -19,6 +22,10 @@ import zio.clock.Clock
 
 import java.util.UUID
 import zhttp.service.server.ServerChannelFactory
+import zio.config.getConfig
+import zio.config.magnolia.{Descriptor, descriptor}
+import zio.config.typesafe.TypesafeConfig
+import zio.telemetry.opentelemetry.Tracing
 import zio.zmx.MetricSnapshot.Prometheus
 import zio.zmx._
 import zio.zmx.diagnostics._
@@ -87,17 +94,24 @@ object UserServer extends App {
 
   val aspServerStartCountAll = MetricAspect.count("serverRunAll")
 
-  val program: ZIO[Any with Console, Throwable, Nothing] = {
+  implicit val sttpUriDescriptor: Descriptor[Uri] =
+    Descriptor[String].transformOrFailLeft(Uri.parse)(_.toString)
+  val configLayer = TypesafeConfig.fromDefaultLoader(descriptor[AppConfig])
+
+  val program: ZIO[Any with Console with Has[AppConfig], Throwable, Nothing] = {
     import sttp.client3._
     import sttp.client3.asynchttpclient.zio._
-    val port = 8080
-    //val app = getVersion(root) +++ AuthenticationApp.login +++ userEndpoints +++ formEndpoints
+    //val port = 8080
     val app = CORS(getVersion(root) +++ metricsEndpoint +++ AuthenticationApp.login, config = getCorsConfig()) +++ userEndpoints +++ formEndpoints
-    val server = Server.port(port) ++ Server.app(app) ++ Server.maxRequestSize(4194304)
+
     for {
-      _ <- putStrLn(s"Starting the server at port, $port")
-      s <- server.start.inject(ServerChannelFactory.auto, EventLoopGroup.auto(0), PrometheusClient.live, Console.live, ZioQuillContext.dataSourceLayer, OptionsRepository.layer, ValidationsRepository.layer, FormElementsRepository.layer, logLayer, Clock.live, AsyncHttpClientZioBackend.layer(), UserService.layerKeycloakService, FormRepository.layer, FormService.layer, system.System.live) @@ aspServerStartCountAll
-      _ <- putStrLn(s"Shutting down the server at port, $port")
+      conf <- getConfig[AppConfig]
+      backendPort = conf.backend.host.port.getOrElse(8080)
+      _ <- putStrLn(s"Starting the server at port, $backendPort")
+      server = Server.port(backendPort) ++ Server.app(app) ++ Server.maxRequestSize(4194304)
+      //s <- server.start.inject(ServerChannelFactory.auto, EventLoopGroup.auto(0), Clock.live, JaegerTracer.live, Tracing.live, PrometheusClient.live, Console.live, ZioQuillContext.dataSourceLayer, OptionsRepository.layer, ValidationsRepository.layer, FormElementsRepository.layer, logLayer, AsyncHttpClientZioBackend.layer(), UserService.layerKeycloakService, FormRepository.layer, FormService.layer, system.System.live) @@ aspServerStartCountAll
+      s <- server.start.inject(ServerChannelFactory.auto, EventLoopGroup.auto(0), Clock.live, PrometheusClient.live, Console.live, ZioQuillContext.dataSourceLayer, OptionsRepository.layer, ValidationsRepository.layer, FormElementsRepository.layer, logLayer, AsyncHttpClientZioBackend.layer(), UserService.layerKeycloakService, FormRepository.layer, FormService.layer, system.System.live) @@ aspServerStartCountAll
+      _ <- putStrLn(s"Shutting down the server at port, $backendPort")
     } yield s
   }
 
@@ -108,7 +122,7 @@ object UserServer extends App {
     Runtime.default.mapPlatform(_.withSupervisor(ZMXSupervisor))
 
   override def run(args: List[String]): URIO[zio.ZEnv, ExitCode] = {
-    runtime.unsafeRun(program.provideCustomLayer(diagnosticsLayer))
+    runtime.unsafeRun(program.provideCustomLayer(diagnosticsLayer ++ configLayer))
     //program.exitCode
   }
 }

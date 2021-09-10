@@ -15,7 +15,8 @@ val zioLoggingVersion = "0.5.8"
 val zioHttpVersion    = "1.0.0.0-RC17"
 val zioJsonVersion    = "0.2.0-M1"
 val zioOpticsVersion  = "0.1.0"
-val zioOpenTracingVersion = "0.8.1"
+val telemetry         = "0.8.1"
+val openTracing       = "0.8.1"
 val zioSchemaVersion  = "0.0.6"
 val zQueryVersion     = "0.2.9"
 val quillVersion      = "3.7.1"
@@ -24,8 +25,34 @@ val zioConfigVersion  = "1.0.5"
 val tapirVersion      = "0.18.0-M11"
 val chimneyVersion    = "0.6.1"
 val sttpVersion       = "3.3.13"
+val jaeger            = "1.6.0"
+val zipkin            = "2.16.3"
+val zioInteropCats    = "2.5.1.0"
+val opentelemetry     = "1.5.0"
+val opencensus        = "0.28.3"
+val opentracing       = "0.33.0"
 
 scalacOptions += "-Ymacro-annotations"
+
+lazy val opentracingLibs = Seq(
+  "io.opentracing"          % "opentracing-api"         % opentracing,
+  "io.opentracing"          % "opentracing-noop"        % opentracing,
+  "io.opentracing"          % "opentracing-mock"        % opentracing % Test,
+  "org.scala-lang.modules" %% "scala-collection-compat" % "2.3.1"
+)
+
+lazy val opentelemetryLibs = Seq(
+  "io.opentelemetry"        % "opentelemetry-api"         % opentelemetry,
+  "io.opentelemetry"        % "opentelemetry-context"     % opentelemetry,
+  "io.opentelemetry"        % "opentelemetry-sdk-testing" % opentelemetry % Test,
+  "org.scala-lang.modules" %% "scala-collection-compat"   % "2.5.0"
+)
+
+lazy val opencensusLibs = Seq(
+  "io.opencensus" % "opencensus-api"               % opencensus,
+  "io.opencensus" % "opencensus-impl"              % opencensus,
+  "io.opencensus" % "opencensus-contrib-http-util" % opencensus
+)
 
 libraryDependencies ++= Seq(
   "dev.zio"                       %% "zio"                      % zioVersion,
@@ -40,7 +67,8 @@ libraryDependencies ++= Seq(
   "dev.zio"                       %% "zio-schema"               % zioSchemaVersion,
   "io.github.kitlangton"          %% "zio-magic"                % "0.3.2",
   "dev.zio"                       %% "zio-optics"               % zioOpticsVersion,
-  "dev.zio"                       %% "zio-opentracing"          % zioOpenTracingVersion,
+  "dev.zio"                       %% "zio-opentelemetry"            % telemetry,
+  "dev.zio"                       %% "zio-opentracing"          % openTracing,
   "dev.zio"                       %% "zio-streams"              % zioVersion,
   "dev.zio"                       %% "zio-kafka"                % "0.16.0",
   "dev.zio"                       %% "zio-zmx"                  % "0.0.8",
@@ -71,10 +99,20 @@ libraryDependencies ++= Seq(
   //"com.outr"                      %% "scribe-slf4j"             % "3.4.0",
   //"com.softwaremill.sttp.client3" %% "scribe-backend"           % "3.3.13",
   "commons-validator"             % "commons-validator"         % "1.7",
+  "io.jaegertracing"              % "jaeger-core"               % jaeger,
+  "io.jaegertracing"              % "jaeger-client"             % jaeger,
+  "io.jaegertracing"              % "jaeger-zipkin"             % jaeger,
+  "dev.zio"                      %% "zio-interop-cats"          % zioInteropCats,
+  "io.zipkin.reporter2"           % "zipkin-reporter"           % zipkin,
+  "io.zipkin.reporter2"           % "zipkin-sender-okhttp3"     % zipkin,
+  "io.opentelemetry"              % "opentelemetry-exporter-jaeger" % opentelemetry,
+  "io.opentelemetry"              % "opentelemetry-sdk" % opentelemetry,
+  "io.grpc" % "grpc-netty-shaded" % "1.40.1",
+  "io.grpc"                       % "grpc-netty-shaded"             % "1.40.1",
   "dev.zio"                       %% "zio-test"                 % zioVersion % Test,
   "dev.zio"                       %% "zio-test-sbt"             % zioVersion % Test,
   "dev.zio"                       %% "zio-test-magnolia"        % zioVersion % Test
-)
+) ++ opentracingLibs ++ opentelemetryLibs ++ opencensusLibs
 
 testFrameworks += new TestFramework("zio.test.sbt.ZTestFramework")
 

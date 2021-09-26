@@ -1,6 +1,7 @@
 package com.data2ui.models
 
 import com.bootes.dao.{CreateUserRequest, Metadata, User}
+import com.bootes.validators.Validators
 import io.getquill.Embedded
 import io.scalaland.chimney.dsl.TransformerOps
 import zio.json.{DeriveJsonCodec, EncoderOps, JsonCodec, JsonDecoder, JsonEncoder}
@@ -144,7 +145,7 @@ object Models {
   }
 
 
-  case class FormSection(title: String, seqNo: Option[Int], elements: Seq[CreateElementRequest]) {
+  case class FormSection(title: String, seqNo: Option[Int], elements: Seq[CreateElementRequest], customerError: Option[String] = None) {
     def makeElementsOrdered(): Seq[CreateElementRequest] = elements.zipWithIndex.map(e => e._1.copy(sectionName = Option(title), seqNo = Some(e._2)))
   }
   object FormSection{
@@ -161,15 +162,26 @@ object Models {
                                 designProperties: Option[DesignProperties],
                                 status: Option[String],
                                 formJson: Option[String] = None,
-                                metadata: Option[Metadata] = Some(Metadata.default)
+                                metadata: Option[Metadata] = Some(Metadata.default),
+                                customerError: Option[String] = None,
+                                errors: Option[Seq[String]] = None
                               ) {
     def getFormElements() = sections.zipWithIndex.map(s => s._1.elements.map(_.copy(sectionName = Some(s._1.title), sectionSeqNo = Some(s._2 + 1)))).flatten
+
+    def hasErrors = (customerError.isDefined && !customerError.getOrElse("").isEmpty) || (sections.filter(s => !s.elements.filter(e => !e.customerError.getOrElse("").isEmpty).isEmpty).nonEmpty)
   }
   object CreateFormRequest{
     implicit val codec: JsonCodec[CreateFormRequest] = DeriveJsonCodec.gen[CreateFormRequest]
 
     implicit def toForm(record: CreateFormRequest, status: Option[String]): Form = {
       record.into[Form].transform.copy(id = record.id, metadata = record.metadata).copy(status = status)
+    }
+    def validate(value: CreateFormRequest): CreateFormRequest = {
+      val v1 = Validators.validateTitle(value.title).toEither
+      if (v1.isLeft) value.copy(customerError = Some(v1.left.get.mkString(", "))) else {
+          val v = Validators.validateFormSections(value.sections).toEither
+          if (v.isLeft) value.copy(customerError = Some(v.left.get.mkString(", "))) else value.copy(sections = v.right.get)
+      }
     }
   }
 

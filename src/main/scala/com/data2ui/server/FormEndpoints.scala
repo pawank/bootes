@@ -13,7 +13,7 @@ import zhttp.http._
 import zio.console._
 import zio.duration.durationInt
 import zio.json._
-import zio.{Has, IO, UIO, ZIO}
+import zio.{Has, IO, Task, UIO, ZIO}
 import zio.logging._
 import zio.logging.slf4j._
 
@@ -54,8 +54,10 @@ object FormEndpoints extends RequestOps {
           for {
             request <- extractBodyFromJson[CreateFormRequest](req)
             results <- {
-              val orederedReq = request.copy(sections = request.sections.map(s => s.copy(elements = s.makeElementsOrdered())))
-              FormService.upsert(orederedReq)(serviceContext.copy(requestId = request.requestId.getOrElse(serviceContext.requestId)))
+              val orderedReq = request.copy(sections = request.sections.map(s => s.copy(elements = s.makeElementsOrdered())))
+              val validatedForm = CreateFormRequest.validate(orderedReq)
+              if (validatedForm.hasErrors) Task.succeed(validatedForm) else FormService.upsert(validatedForm)(serviceContext.copy(requestId = request.requestId.getOrElse(serviceContext.requestId)))
+              //FormService.upsert(orderedReq)(serviceContext.copy(requestId = request.requestId.getOrElse(serviceContext.requestId)))
             }
           } yield Response.jsonString(results.toJson)
         case req@Method.POST -> Root / "columba" / "v1" / "forms" / sectionName / stepNo =>
@@ -63,9 +65,10 @@ object FormEndpoints extends RequestOps {
           for {
             request <- extractBodyFromJson[CreateFormRequest](req)
             results <- {
-              val orederedReq = request.copy(sections = request.sections.map(s => s.copy(elements = s.makeElementsOrdered())))
-              println(s"Route sectionName = $sectionName")
-              FormService.submit(orederedReq, sectionName, stepNo.toInt)(serviceContext.copy(requestId = request.requestId.getOrElse(serviceContext.requestId)))
+              val orderedReq = request.copy(sections = request.sections.map(s => s.copy(elements = s.makeElementsOrdered())))
+              //println(s"Route sectionName = $sectionName")
+              val validatedForm = CreateFormRequest.validate(orderedReq)
+              if (validatedForm.hasErrors) Task.succeed(validatedForm) else FormService.submit(orderedReq, sectionName, stepNo.toInt)(serviceContext.copy(requestId = request.requestId.getOrElse(serviceContext.requestId)))
             }
           } yield Response.jsonString(results.toJson)
       }

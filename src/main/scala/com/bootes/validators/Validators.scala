@@ -69,30 +69,58 @@ object Validators {
 
   def validateValidationsElement(values: Seq[String], value: Validations):Validation[String, Validations] = {
 
-    def check[T](values: Seq[String], predicate: String => Boolean): Boolean = {
-      val (newVals: Seq[Boolean], vals: Seq[String], originalSize: Int) =  (values.map(x => predicate(x)), values, values.size)
-      println(s"newVals = $newVals, vals = $vals and size = $originalSize")
-      values.nonEmpty && (newVals.size == originalSize)
+    def check[T](values: Seq[String], predicate: String => Boolean): (Boolean, String) = {
+      var allErrors: scala.collection.mutable.Buffer[String] = scala.collection.mutable.Buffer.empty
+      val (newVals: Seq[String], vals: Seq[String], originalSize: Int) =  (values.filter(x => {
+        val cond = predicate(x)
+        if (!cond) {
+          allErrors = allErrors :+ x
+        }
+        //println(s"Predicate result = $cond for x = $x and values = $values")
+        cond
+      }), values, values.size)
+      //println(s"newVals = $newVals, vals = $vals and size = $originalSize")
+      (values.nonEmpty && (newVals.size == originalSize), if (allErrors.isEmpty) "" else "(" + allErrors.mkString(", ") + ")")
     }
+
+    def makeDisplayableValue(value: String) = if (value.isEmpty) "<empty>" else value
 
     value.`type` match {
       case "int" | "number" | "integer" | "Int" | "Integer" =>
-        def validateInt(x: String): Boolean = x.toInt.isValidInt
+        def validateInt(x: String): Boolean = {
+          //val minOk = (x.toInt >= value.minimum.getOrElse(0))
+          //val maxOk = (x.toInt <= value.maximum.getOrElse(99999999))
+          //println(s"Int: x = $x, minimum = ${value.minimum} and maximum = ${value.maximum}, minOk = $minOk and maxOk = $maxOk")
+          //x.toInt.isValidInt && (minOk && maxOk)
+          x.toInt.isValidInt && ((x.toInt >= value.minimum.getOrElse(0)) && (x.toInt <= value.maximum.getOrElse(99999999)))
+        }
         val result = check(values, validateInt)
-        if (result) Validation.succeed(value) else Validation.fail(s"`type`, number mismatch for the values provided")
+        if (result._1) Validation.succeed(value) else Validation.fail(s"`type`, number mismatch for the values, ${makeDisplayableValue(result._2)} provided")
       case "string" | "String" =>
         val result = !values.map(!_.isEmpty).isEmpty
-        if (result) Validation.succeed(value) else Validation.fail(s"`type` mismatch for the values provided")
+        if (result) Validation.succeed(value) else Validation.fail(s"`type` mismatch for the empty values provided")
       case "bool" | "boolean" | "Boolean" =>
         val result = check(values, _.toBoolean)
-        if (result) Validation.succeed(value) else Validation.fail(s"`type`, boolean mismatch for the values provided")
+        if (result._1) Validation.succeed(value) else Validation.fail(s"`type`, boolean mismatch for the values, ${makeDisplayableValue(result._2)} provided")
       case "date" | "datetime" | "Date" | "Dateime" =>
         val result = check(values, isValidDate)
-        if (result) Validation.succeed(value) else Validation.fail(s"`type`, date mismatch for the values provided")
+        if (result._1) Validation.succeed(value) else Validation.fail(s"`type`, date or datetime mismatch for the values, ${makeDisplayableValue(result._2)} provided")
       case "range" | "Range" =>
-        def validateInt(x: String): Boolean = x.toInt >= value.minimum.getOrElse(0) && x.toInt <= value.minimum.getOrElse(99999999)
-        val result = check(values, validateInt)
-        if (result) Validation.succeed(value) else Validation.fail(s"`type`, date mismatch for the values provided")
+        def validateInt(x: String): Boolean = {
+          if ((value.minimum.getOrElse(0) > 0) || (value.maximum.getOrElse(0) > 0)) {
+            (x.toInt >= value.minimum.getOrElse(0)) && (x.toInt <= value.maximum.getOrElse(99999999))
+          } else true
+        }
+        def validateRange(x: String): Boolean = {
+          value.values.getOrElse(Seq.empty).contains(x)
+          val xs = value.values.getOrElse(Seq.empty)
+          val r = xs.contains(x)
+          println(s"Range: xs = $xs, x = $x and r = $r")
+          r
+        }
+        val result0 = check(values, validateInt)
+        val result = check(values, validateRange)
+        if (result._1 && result0._1) Validation.succeed(value) else Validation.fail(s"`type`, range mismatch for the values, ${makeDisplayableValue(result._2)} provided")
       case _ =>
         Validation.succeed(value)
     }
@@ -111,21 +139,17 @@ object Validators {
           case _ =>
             e.validations.map(validator => validateValidationsElement(e.values, validator).toEither)
         }
-        println(title)
-        println(sectionName)
-        println(result)
         val filteredResults: Seq[Either[NonEmptyChunk[String], Validations]] = result.filter(r => r.isLeft)
         val errors: Seq[String] = Seq(title, sectionName, chkType).filter(r => {
           r.isLeft
-        }).map(r => r.left.get.mkString(", ")) ++ filteredResults.filter(r => r.isLeft).map(r => {
-          r.left.get.mkString(", ")
+        }).map(r => r.left.get.mkString(". ")) ++ filteredResults.filter(r => r.isLeft).map(r => {
+          r.left.get.mkString(". ")
         })
-        println(errors)
-        val customerError = errors.mkString(", ")
+        val customerError = errors.mkString(". ")
         allErrors = allErrors :+ customerError
         e.copy(customerError = if (customerError.isEmpty) None else Some(customerError), errors = if (errors.isEmpty) None else Some(errors))
       })
-    if (allErrors.isEmpty) Validation.succeed(value.copy(elements = elements)) else Validation.succeed(value.copy(elements = elements, customerError = Some(allErrors.mkString(", "))))
+    if (allErrors.isEmpty) Validation.succeed(value.copy(elements = elements)) else Validation.succeed(value.copy(elements = elements, customerError = Some(allErrors.mkString(". "))))
   }
   def validateFormSections(values: Seq[FormSection]):ZValidation[Nothing, FormSection, Seq[FormSection]] = {
     Validation.collectAllPar(values.map(validateFormSection(_)))

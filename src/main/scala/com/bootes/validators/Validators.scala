@@ -121,6 +121,18 @@ object Validators {
         val result0 = check(values, validateInt)
         val result = check(values, validateRange)
         if (result._1 && result0._1) Validation.succeed(value) else Validation.fail(s"`type`, range mismatch for the values, ${makeDisplayableValue(result._2)} provided")
+      case "regex" | "Regex" =>
+        import scala.util.matching._
+        def validateRegex(inputValue: String): Boolean = value.values match {
+          case Some(regexList) =>
+            val regexs = regexList.map(r => new Regex(r))
+            val regexMatches = regexs.filter(r => r.matches(inputValue))
+            regexList.nonEmpty && (regexs.size == regexMatches.size)
+          case _ =>
+            true
+        }
+        val result = check(values, validateRegex)
+        if (result._1) Validation.succeed(value) else Validation.fail(s"`type`, regex mismatch for the values, ${makeDisplayableValue(result._2)} provided")
       case _ =>
         Validation.succeed(value)
     }

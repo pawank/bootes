@@ -55,9 +55,9 @@ object FormEndpoints extends RequestOps {
             request <- extractBodyFromJson[CreateFormRequest](req)
             results <- {
               val orderedReq = request.copy(sections = request.sections.map(s => s.copy(elements = s.makeElementsOrdered())))
-              //val validatedForm = CreateFormRequest.validate(orderedReq)
-              //if (validatedForm.hasErrors) Task.succeed(validatedForm) else FormService.upsert(validatedForm)(serviceContext.copy(requestId = request.requestId.getOrElse(serviceContext.requestId)))
-              FormService.upsert(orderedReq)(serviceContext.copy(requestId = request.requestId.getOrElse(serviceContext.requestId)))
+              val validatedForm = CreateFormRequest.validate(orderedReq)
+              if (validatedForm.hasErrors) Task.succeed(validatedForm) else FormService.upsert(validatedForm)(serviceContext.copy(requestId = request.requestId.getOrElse(serviceContext.requestId)))
+              //FormService.upsert(orderedReq)(serviceContext.copy(requestId = request.requestId.getOrElse(serviceContext.requestId)))
             }
           } yield Response.jsonString(results.toJson)
         case req@Method.POST -> Root / "columba" / "v1" / "forms" / sectionName / stepNo =>

@@ -115,7 +115,7 @@ object Validators {
           value.values.getOrElse(Seq.empty).contains(x)
           val xs = value.values.getOrElse(Seq.empty)
           val r = xs.contains(x)
-          println(s"Range: xs = $xs, x = $x and r = $r")
+          //println(s"Range: xs = $xs, x = $x and r = $r")
           r
         }
         val result0 = check(values, validateInt)
@@ -164,6 +164,6 @@ object Validators {
     if (allErrors.isEmpty) Validation.succeed(value.copy(elements = elements)) else Validation.succeed(value.copy(elements = elements, customerError = Some(allErrors.mkString(". "))))
   }
   def validateFormSections(values: Seq[FormSection]):ZValidation[Nothing, FormSection, Seq[FormSection]] = {
-    Validation.collectAllPar(values.map(validateFormSection(_)))
+    Validation.validateAll(values.map(validateFormSection(_)))
   }
 }

@@ -96,7 +96,9 @@ case class ApiToken (
                       email: Option[String],
                       username: Option[String],
                       requestId: Option[String]
-                    )
+                    ) {
+  override def toString(): String = s"ApiToken(username=$username, scope=$scope, name=$name, username=$username, requestId=$requestId, active=$active)"
+}
 object ApiToken{
   implicit val codec: JsonCodec[ApiToken] = DeriveJsonCodec.gen[ApiToken]
 }

@@ -90,6 +90,7 @@ object UserServer extends App {
     }
   }
 
+
   val userEndpoints: Http[Has[UserService] with Clock with Console with Logging with system.System, HttpError, Request, Response[Has[UserService]  with Console with Logging, HttpError]] =
     CORS(
       AuthenticationApp.authenticate(HttpApp.forbidden("Oops! You are not authorised to access the requested feature. Please check your credentials."), UserEndpoints.user),

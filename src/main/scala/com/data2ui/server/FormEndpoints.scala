@@ -7,7 +7,7 @@ import com.bootes.server.UserServer
 import com.bootes.server.UserServer.{CorrelationId, DebugJsonLog}
 import com.bootes.server.auth.{ApiToken, LogoutRequest, Token}
 import com.data2ui.FormService
-import com.data2ui.models.Models.CreateFormRequest
+import com.data2ui.models.Models.{CreateFormRequest, UiResponse, UploadResponse}
 import pdi.jwt.JwtClaim
 import zhttp.http._
 import zio.console._
@@ -17,10 +17,10 @@ import zio.{Has, IO, Task, UIO, ZIO}
 import zio.logging._
 import zio.logging.slf4j._
 
+import java.nio.file.{Files, Paths}
 import java.util.UUID
 
 object FormEndpoints extends RequestOps {
-
   val form: ApiToken => Http[Has[FormService] with Console with Logging, HttpError, Request, UResponse] = jwtClaim => {
     Http
       .collectM[Request] {
@@ -76,6 +76,47 @@ object FormEndpoints extends RequestOps {
               //println(s"Route sectionName = $sectionName")
               val validatedForm = CreateFormRequest.validate(orderedReq)
               if (validatedForm.hasErrors) Task.succeed(validatedForm) else FormService.submit(orderedReq, sectionName, stepNo.toInt)(serviceContext.copy(requestId = request.requestId.getOrElse(serviceContext.requestId)))
+            }
+          } yield Response.jsonString(results.toJson)
+        case req@Method.POST -> Root / "columba" / "v1" / "upload" =>
+          implicit val serviceContext: ServiceContext = getServiceContext(jwtClaim)
+          val formId = (req.url.queryParams.get("formId") match {
+            case Some(xs) =>
+              xs.headOption
+            case _ =>
+              None
+          }).getOrElse("unknown")
+          val filename = (req.url.queryParams.get("filename") match {
+            case Some(xs) =>
+              xs.headOption
+            case _ =>
+              None
+          }).getOrElse(UUID.randomUUID().toString)
+          for {
+            _ <- log.locally(CorrelationId(serviceContext.requestId).andThen(DebugJsonLog(serviceContext.toString)))(
+              log.info(s"Uploading file for form, $formId")
+            )
+            results <- {
+              import better.files._
+              import File._
+              import java.io.{File => JFile}
+              val prefix = "files"
+              println(s"claim: $jwtClaim")
+              val username = jwtClaim.username
+              val filepath = s"$filename"
+              val file = root/s"$prefix"/s"$username"/s"""$filename"""
+              req.content match {
+                case HttpData.CompleteData(data) =>
+                  //Files.write(Paths.get(filename), data.map(_.byteValue).toArray)
+                  file.createIfNotExists().writeBytes(data.map(_.byteValue).toArray.toIterator)
+                  Task.succeed(UploadResponse(requestId = serviceContext.requestId, message = "", path = List(s"${file.url.toString}")))
+                case HttpData.StreamData(chunks)      =>
+                  //println(s"chunks: $chunks")
+                  "<Chunked>"
+                  Task.succeed(UploadResponse(requestId = serviceContext.requestId, message = "", path = List("")))
+                case HttpData.Empty              =>
+                  Task.succeed(UploadResponse(requestId = serviceContext.requestId, message = "", path = List("")))
+              }
             }
           } yield Response.jsonString(results.toJson)
       }

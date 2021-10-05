@@ -217,4 +217,9 @@ object Models {
   object UiResponse{
     implicit val codec: JsonCodec[UiResponse] = DeriveJsonCodec.gen[UiResponse]
   }
+
+  case class UploadResponse(requestId: UUID, message: String, path: List[String])
+  object UploadResponse {
+    implicit val codec: JsonCodec[UploadResponse] = DeriveJsonCodec.gen[UploadResponse]
+  }
 }

@@ -31,6 +31,7 @@ val zioInteropCats    = "2.5.1.0"
 val opentelemetry     = "1.5.0"
 val opencensus        = "0.28.3"
 val opentracing       = "0.33.0"
+val betterfiles       = "3.9.1"
 
 scalacOptions += "-Ymacro-annotations"
 
@@ -110,6 +111,7 @@ libraryDependencies ++= Seq(
   "io.opentelemetry"              % "opentelemetry-sdk" % opentelemetry,
   "io.grpc" % "grpc-netty-shaded" % "1.40.1",
   "io.grpc"                       % "grpc-netty-shaded"             % "1.40.1",
+  "com.github.pathikrit"          %% "better-files"             % betterfiles, 
   "dev.zio"                       %% "zio-test"                 % zioVersion % Test,
   "dev.zio"                       %% "zio-test-sbt"             % zioVersion % Test,
   "dev.zio"                       %% "zio-test-magnolia"        % zioVersion % Test

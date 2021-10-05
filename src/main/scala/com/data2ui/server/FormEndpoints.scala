@@ -13,10 +13,12 @@ import zhttp.http._
 import zio.console._
 import zio.duration.durationInt
 import zio.json._
-import zio.{Has, IO, Task, UIO, ZIO}
+import zio.{Chunk, Has, IO, Task, UIO, ZIO}
 import zio.logging._
 import zio.logging.slf4j._
+import zio.stream.ZStream
 
+import java.io.{FileInputStream, IOException}
 import java.nio.file.{Files, Paths}
 import java.util.UUID
 
@@ -92,34 +94,38 @@ object FormEndpoints extends RequestOps {
             case _ =>
               None
           }).getOrElse(s"${UUID.randomUUID().toString}.dat")
+          val username = jwtClaim.username.getOrElse("unknown")
+          val client = jwtClaim.client_id.getOrElse("unknown")
           for {
             _ <- log.locally(CorrelationId(serviceContext.requestId).andThen(DebugJsonLog(serviceContext.toString)))(
-              log.info(s"Uploading file for form, $formId")
+              log.info(s"Uploading file for form, $formId for username, $username")
             )
             results <- {
               import better.files._
               import File._
               import java.io.{File => JFile}
+              val uid = UUID.randomUUID()
               val prefix = "files"
               //println(s"claim: $jwtClaim")
-              val username = jwtClaim.username.getOrElse("unknown")
-              val client = jwtClaim.client_id.getOrElse("unknown")
               val filepath = s"$filename"
-              val folder: File = s"$prefix"/s"$client"/s"$username"
-              val file: File = s"$prefix"/s"$client"/s"$username"/s"""$filename"""
+              val folder: File = s"$prefix"/s"$client"/s"$username"/s"$uid"
+              val file: File = s"$prefix"/s"$client"/s"$username"/s"$uid"/s"""$filename"""
               req.content match {
                 case HttpData.CompleteData(data) =>
                   //Files.write(Paths.get(filename), data.map(_.byteValue).toArray)
                   folder.createIfNotExists(asDirectory = true, createParents = true)
                   file.writeBytes(data.map(_.byteValue).toArray.toIterator)
-                  Task.succeed(UploadResponse(requestId = serviceContext.requestId, message = "", path = List(s"${file.url.toString}")))
+                  Task.succeed(UploadResponse(id = uid, message = "", filename = filename, path = s"${file.url.toString}"))
                 case HttpData.StreamData(chunks)      =>
                   //println(s"chunks: $chunks")
-                  Task.succeed(UploadResponse(requestId = serviceContext.requestId, message = "", path = List("")))
+                  Task.succeed(UploadResponse(id = uid, message = "", filename = filename,  path = ""))
                 case HttpData.Empty              =>
-                  Task.succeed(UploadResponse(requestId = serviceContext.requestId, message = "", path = List("")))
+                  Task.succeed(UploadResponse(id = uid, message = "", filename = filename, path = ""))
               }
             }
+            _ <- log.locally(CorrelationId(serviceContext.requestId).andThen(DebugJsonLog(serviceContext.toString)))(
+              log.info(s"Uploaded file, ${results.filename} for form, $formId for username, $username")
+            )
           } yield Response.jsonString(results.toJson)
       }
       .catchAll {
@@ -128,6 +134,41 @@ object FormEndpoints extends RequestOps {
         case ex: Throwable =>
           Http.fail(HttpError.InternalServerError(msg = ex.getMessage, cause = None))
         case err => Http.fail(HttpError.InternalServerError(msg = err.toString))
+      }
+  }
+
+  val formOtherRoutes: ApiToken => Http[Logging, Nothing, Request, Response[zio.blocking.Blocking, Throwable]] = jwtClaim => {
+    Http
+      .collectM[Request] {
+        case req@Method.GET -> Root / "columba" / "v1" / "files" / id =>
+          implicit val serviceContext: ServiceContext = getServiceContext(jwtClaim)
+          val filename = (req.url.queryParams.get("filename") match {
+            case Some(xs) =>
+              xs.headOption
+            case _ =>
+              None
+          }).getOrElse(s"${UUID.randomUUID().toString}.dat")
+          val username = jwtClaim.username.getOrElse("unknown")
+          val client = jwtClaim.client_id.getOrElse("unknown")
+          for {
+            _ <- log.locally(CorrelationId(serviceContext.requestId).andThen(DebugJsonLog(serviceContext.toString)))(
+              log.info(s"Fetching file for filename, $filename for username, $username")
+            )
+          } yield {
+            import better.files._
+            import File._
+            import java.io.{File => JFile}
+            val uid = id
+            val prefix = "files"
+            //println(s"claim: $jwtClaim")
+            val filepath = s"$filename"
+            val folder: File = s"$prefix"/s"$client"/s"$username"/s"$uid"
+            val file: File = s"$prefix"/s"$client"/s"$username"/s"$uid"/s"""$filename"""
+            val content = HttpData.fromStream {
+              ZStream.fromFile(Paths.get(file.path.toString))//.orElse(ZStream.empty)
+            }
+            Response.http(content = content)
+          }
       }
   }
 }

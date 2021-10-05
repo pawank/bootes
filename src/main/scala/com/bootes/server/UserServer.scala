@@ -103,6 +103,12 @@ object UserServer extends App {
       config = getCorsConfig()
     )
 
+  val formOtherRoutesEndpoints =
+    CORS(
+      AuthenticationApp.authenticate(HttpApp.forbidden("Oops! You are not authorised to access the requested feature. Please check your credentials."), FormEndpoints.formOtherRoutes),
+      config = getCorsConfig()
+    )
+
   val propagator: TextMapPropagator       = W3CTraceContextPropagator.getInstance()
   val getter: TextMapGetter[List[Header]] = new TextMapGetter[List[Header]] {
     override def keys(carrier: List[Header]): lang.Iterable[String] =
@@ -152,7 +158,7 @@ object UserServer extends App {
     import sttp.client3._
     import sttp.client3.asynchttpclient.zio._
     //val port = 8080
-    val app = CORS(metricsEndpoint +++ AuthenticationApp.login, config = getCorsConfig()) +++ userEndpoints +++ formEndpoints
+    val app = CORS(metricsEndpoint +++ AuthenticationApp.login, config = getCorsConfig()) +++ userEndpoints +++ formEndpoints +++ formOtherRoutesEndpoints
 
     for {
       conf <- getConfig[AppConfig]

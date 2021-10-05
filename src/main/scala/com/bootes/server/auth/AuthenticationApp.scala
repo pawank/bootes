@@ -89,6 +89,7 @@ case class ApiToken (
                       refresh_token: Option[String],
                       token_type: Option[String],
                       id_token: Option[String],
+                      client_id: Option[String],
                       session_state: Option[String],
                       scope: Option[String],
                       active: Option[Boolean],
@@ -97,7 +98,7 @@ case class ApiToken (
                       username: Option[String],
                       requestId: Option[String]
                     ) {
-  override def toString(): String = s"ApiToken(username=$username, scope=$scope, name=$name, username=$username, requestId=$requestId, active=$active)"
+  override def toString(): String = s"ApiToken(username=$username, scope=$scope, name=$name, client_id=$client_id, requestId=$requestId, active=$active)"
 }
 object ApiToken{
   implicit val codec: JsonCodec[ApiToken] = DeriveJsonCodec.gen[ApiToken]
@@ -168,7 +169,7 @@ object AuthenticationApp extends RequestOps {
         if (isActive) {
           log.locally(CorrelationId(serviceContext.requestId).andThen(DebugJsonLog(adminTT.name.getOrElse(""))))(
             log.debug(s"Received valid token for admin now")
-          ) &> ZIO.succeed(Option(adminTT))
+          ) &> ZIO.succeed(Option(adminTT.copy(username = tt.username, email = tt.email, name = tt.name, client_id = tt.client_id)))
         } else ZIO.fail(s"Bearer token has expired for username, ${tt.username}")
         //if (adminTT.active.getOrElse(false)) ZIO.succeed(Option(adminTT)) else ZIO.fail(s"Bearer token has expired for username, ${tt.username}")
       }
@@ -195,7 +196,7 @@ object AuthenticationApp extends RequestOps {
             .flatMap(header => {
               implicit val serviceContext = ServiceContext(token = getMaybeToken(header.value.toString.trim).getOrElse(""), requestId = ServiceContext.newRequestId)
               val claim = jwtDecode(header.value.toString)
-              println(s"\n\n\nclaim = $claim")
+              //println(s"\n\n\nclaim = $claim")
               getToken(serviceContext.token)
             })
             //.flatMap(header => jwtDecode(header.value.toString))
@@ -305,6 +306,7 @@ object AuthenticationApp extends RequestOps {
       value <- {
         maybeToken match {
           case Right(tokenObject) =>
+            //println(s"Token in getApiToken = $tokenObject")
             ZIO.succeed(tokenObject.copy(access_token = Some(token.value), requestId = Some(serviceContext.requestId.toString)))
           case Left(error) =>
             ZIO.fail(FailedLogin("", error))

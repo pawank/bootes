@@ -91,7 +91,7 @@ object FormEndpoints extends RequestOps {
               xs.headOption
             case _ =>
               None
-          }).getOrElse(UUID.randomUUID().toString)
+          }).getOrElse(s"${UUID.randomUUID().toString}.dat")
           for {
             _ <- log.locally(CorrelationId(serviceContext.requestId).andThen(DebugJsonLog(serviceContext.toString)))(
               log.info(s"Uploading file for form, $formId")
@@ -101,18 +101,20 @@ object FormEndpoints extends RequestOps {
               import File._
               import java.io.{File => JFile}
               val prefix = "files"
-              println(s"claim: $jwtClaim")
-              val username = jwtClaim.username
+              //println(s"claim: $jwtClaim")
+              val username = jwtClaim.username.getOrElse("unknown")
+              val client = jwtClaim.client_id.getOrElse("unknown")
               val filepath = s"$filename"
-              val file = root/s"$prefix"/s"$username"/s"""$filename"""
+              val folder: File = s"$prefix"/s"$client"/s"$username"
+              val file: File = s"$prefix"/s"$client"/s"$username"/s"""$filename"""
               req.content match {
                 case HttpData.CompleteData(data) =>
                   //Files.write(Paths.get(filename), data.map(_.byteValue).toArray)
-                  file.createIfNotExists().writeBytes(data.map(_.byteValue).toArray.toIterator)
+                  folder.createIfNotExists(asDirectory = true, createParents = true)
+                  file.writeBytes(data.map(_.byteValue).toArray.toIterator)
                   Task.succeed(UploadResponse(requestId = serviceContext.requestId, message = "", path = List(s"${file.url.toString}")))
                 case HttpData.StreamData(chunks)      =>
                   //println(s"chunks: $chunks")
-                  "<Chunked>"
                   Task.succeed(UploadResponse(requestId = serviceContext.requestId, message = "", path = List("")))
                 case HttpData.Empty              =>
                   Task.succeed(UploadResponse(requestId = serviceContext.requestId, message = "", path = List("")))

@@ -26,14 +26,20 @@ object FormEndpoints extends RequestOps {
   val form: ApiToken => Http[Has[FormService] with Console with Logging, HttpError, Request, UResponse] = jwtClaim => {
     Http
       .collectM[Request] {
-        case Method.GET -> Root / "columba" / "v1" / "forms" / "search" =>
+        case req @ Method.GET -> Root / "columba" / "v1" / "forms" / "search" =>
           implicit val serviceContext: ServiceContext = getServiceContext(jwtClaim)
+          val createdBy = req.url.queryParams.get("createdBy") match {
+            case Some(xs) =>
+              xs.headOption
+            case _ =>
+              jwtClaim.username
+          }
           for {
             //_ <- ZIO.succeed(scribe.info("Getting list of all forms"))
             _ <- log.locally(CorrelationId(serviceContext.requestId).andThen(DebugJsonLog(serviceContext.toString)))(
               log.debug("Calling form service for fetching all forms matching with criteria")
             )
-            forms <- FormService.all
+            forms <- FormService.all(createdBy)
           } yield Response.jsonString(forms.toJson)
         case Method.GET -> Root / "columba" / "v1" / "forms" / "template" / id =>
           implicit val serviceContext: ServiceContext = getServiceContext(jwtClaim)
@@ -63,10 +69,11 @@ object FormEndpoints extends RequestOps {
                   false
               }
               val orderedReq = request.copy(sections = request.sections.map(s => s.copy(elements = s.makeElementsOrdered())))
+              val updatedMetadata = orderedReq.metadata.map(m => m.copy(createdBy = jwtClaim.username.getOrElse(""), updatedBy = jwtClaim.username))
               if (validation) {
-                val validatedForm = CreateFormRequest.validate(orderedReq)
+                val validatedForm = CreateFormRequest.validate(orderedReq.copy(metadata = updatedMetadata))
                 if (validatedForm.hasErrors) Task.succeed(validatedForm) else FormService.upsert(validatedForm)(serviceContext.copy(requestId = request.requestId.getOrElse(serviceContext.requestId)))
-              } else FormService.upsert(orderedReq)(serviceContext.copy(requestId = request.requestId.getOrElse(serviceContext.requestId)))
+              } else FormService.upsert(orderedReq.copy(metadata = updatedMetadata))(serviceContext.copy(requestId = request.requestId.getOrElse(serviceContext.requestId)))
             }
           } yield Response.jsonString(results.toJson)
         case req@Method.POST -> Root / "columba" / "v1" / "forms" / sectionName / stepNo =>

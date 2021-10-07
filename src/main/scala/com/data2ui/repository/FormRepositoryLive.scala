@@ -111,7 +111,12 @@ case class FormRepositoryLive(dataSource: DataSource with Closeable, blocking: B
     val formTask = {
       transaction {
         for {
-          id     <- run(FormQueries.upsert(dbForm))
+          existingForm <- getById(dbForm.id)
+          //existingForm <- findById(dbForm.id, isRefreshId = false)
+          id     <- {
+            val updatedFormObj = if (existingForm.isDefined) dbForm.copy(metadata = existingForm.get.metadata) else dbForm
+            run(FormQueries.upsert(updatedFormObj))
+          }
           requestedElements = form.getFormElements()
           elements: Seq[Element] = requestedElements.map(CreateElementRequest.toElement(_)).zipWithIndex.map(e => e._1.copy(seqNo = Option(e._2 + 1), formId = Some(id)))
           savedElements <- {
@@ -134,7 +139,20 @@ case class FormRepositoryLive(dataSource: DataSource with Closeable, blocking: B
     getCreateFormRequest(formTask, isRefreshId = false, sectionName, stepNo + 1)
   }
 
-  override def all: Task[Seq[Form]] = run(FormQueries.elementsQuery).dependOnDataSource().provide(dataSourceLayer)
+  override def all(owner: Option[String]): Task[Seq[Form]] = owner match {
+    case Some(username) =>
+      run(FormQueries.byOwner(username)).dependOnDataSource().provide(dataSourceLayer)
+    case _ =>
+      run(FormQueries.elementsQuery).dependOnDataSource().provide(dataSourceLayer)
+  }
+
+  def getById(id: UUID) = {
+    val formTask = for {
+      results <- run(FormQueries.byId(id)).dependOnDataSource().provide(dataSourceLayer)
+    } yield results.headOption
+    formTask
+  }
+
 
   override def findById(id: UUID, isRefreshId: Boolean): Task[CreateFormRequest] = {
     val formTask = for {
@@ -170,6 +188,7 @@ object FormQueries {
 
   val elementsQuery                   = quote(query[Form])
   def byId(id: UUID)               = quote(elementsQuery.filter(_.id == lift(id)))
+  def byOwner(username: String)               = quote(elementsQuery.filter(_.metadata.map(_.createdBy) == lift(Some(username): Option[String])))
   def byTitle(name: String)               = quote(elementsQuery.filter(_.title == lift(name)))
   def filter(values: Seq[FieldValue])               = quote(query[Form])
   def insertForm(element: Form) = quote(elementsQuery.insert(lift(element)))

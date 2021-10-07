@@ -31,7 +31,7 @@ trait FormService {
   def update(id: UUID, request: CreateFormRequest)(implicit ctx: ServiceContext): Task[Form]
   def upsert(request: CreateFormRequest)(implicit ctx: ServiceContext): Task[CreateFormRequest]
   def submit(request: CreateFormRequest, sectionName: String, stepNo: Int)(implicit ctx: ServiceContext): Task[CreateFormRequest]
-  def all()(implicit ctx: ServiceContext): Task[Seq[Form]]
+  def all(owner: Option[String])(implicit ctx: ServiceContext): Task[Seq[Form]]
   def get(id: UUID)(implicit ctx: ServiceContext): Task[CreateFormRequest]
   def getTemplateForm(id: UUID)(implicit ctx: ServiceContext): Task[CreateFormRequest]
   def getByEmail(email: String)(implicit ctx: ServiceContext): Task[Form]
@@ -56,8 +56,8 @@ case class FormServiceLive(repository: FormRepository, console: Console.Service)
     repository.upsert(request, sectionName, stepNo)
   }
 
-  override def all()(implicit ctx: ServiceContext): Task[Seq[Form]] = for {
-    elements <- repository.all
+  override def all(owner: Option[String])(implicit ctx: ServiceContext): Task[Seq[Form]] = for {
+    elements <- repository.all(owner)
     _     <- console.putStrLn(s"Forms: ${elements.map(_.title).mkString(",")}")
   } yield elements.sortBy(_.id)
 

@@ -175,6 +175,15 @@ case class FormRepositoryLive(dataSource: DataSource with Closeable, blocking: B
       xs <- ZIO.effect(results).orElseFail(NotFoundException(s"Could not find elements with input criteria, ${values.toString()}", values.mkString(", ")))
     } yield xs
   }
+
+  override def deleteById(id: UUID): Task[Option[String]] = {
+    val formTask = for {
+      results <- run(FormQueries.delete(id)).dependOnDataSource().provide(dataSourceLayer)
+      element    <- ZIO.fromOption(None).orElseFail(NotFoundException(s"Could not delete element with id $id", id.toString))
+    } yield element
+    formTask
+  }
+
 }
 
 
@@ -188,6 +197,7 @@ object FormQueries {
 
   val elementsQuery                   = quote(query[Form])
   def byId(id: UUID)               = quote(elementsQuery.filter(_.id == lift(id)))
+  def delete(id: UUID)               = quote(elementsQuery.filter(_.id == lift(id)).delete)
   def byOwner(username: String)               = quote(elementsQuery.filter(_.metadata.map(_.createdBy) == lift(Some(username): Option[String])))
   def byTitle(name: String)               = quote(elementsQuery.filter(_.title == lift(name)))
   def filter(values: Seq[FieldValue])               = quote(query[Form])

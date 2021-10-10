@@ -16,6 +16,7 @@ trait FormRepository {
   def all(owner: Option[String]): Task[Seq[Form]]
   def filter(values: Seq[FieldValue]): Task[Seq[Form]]
   def findById(id: UUID, isRefreshId: Boolean): Task[CreateFormRequest]
+  def deleteById(id: UUID): Task[Option[String]]
   def findByTitle(code: String): Task[Seq[Form]]
 }
 

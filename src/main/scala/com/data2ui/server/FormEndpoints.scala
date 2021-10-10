@@ -134,6 +134,16 @@ object FormEndpoints extends RequestOps {
               log.info(s"Uploaded file, ${results.filename} for form, $formId for username, $username")
             )
           } yield Response.jsonString(results.toJson)
+
+        case Method.DELETE -> Root / "columba" / "v1" / "forms" / id =>
+          implicit val serviceContext: ServiceContext = getServiceContext(jwtClaim)
+          for {
+            maybeError <- {
+              //println(s"Form ID = $id")
+              FormService.delete(UUID.fromString(id))
+            }
+            r <- Task.succeed(UiResponse(requestId = serviceContext.requestId.toString, status = true, message = maybeError.getOrElse(""), code = "204", data = List.empty))
+          } yield Response.jsonString(r.toJson)
       }
       .catchAll {
         case NotFoundException(msg, id) =>

@@ -1,10 +1,13 @@
 package com.data2ui.repository
 
 import com.bootes.dao.Metadata
+import com.bootes.dao.ZioQuillExample.ctx
 import com.data2ui.models.Models.{CreateElementRequest, CreateFormRequest, Element, Form, FormSection, Options, Validations}
 import com.data2ui.repository.ElementQueries.elementsQuery
 import com.data2ui.repository.FormRepository
+import com.data2ui.repository.repository.FormContext.run
 import com.data2ui.repository.repository.NotFoundException
+import io.getquill.Query
 import io.getquill.context.ZioJdbc.QuillZioExt
 import zio._
 import zio.blocking.Blocking
@@ -177,11 +180,21 @@ case class FormRepositoryLive(dataSource: DataSource with Closeable, blocking: B
   }
 
   override def deleteById(id: UUID): Task[Option[String]] = {
-    val formTask = for {
-      results <- run(FormQueries.delete(id)).dependOnDataSource().provide(dataSourceLayer)
-      element    <- ZIO.fromOption(None).orElseFail(NotFoundException(s"Could not delete element with id $id", id.toString))
-    } yield element
-    formTask
+    val formTask = ctx.transaction {
+      for {
+        templateForm <- run(FormQueries.byTemplateId(id))
+        deleteTemplate <- {
+          if (templateForm.headOption.isDefined)
+            run(FormQueries.deleteFormTemplate(id))
+          else run(FormQueries.delete(id))
+        }
+        results <- {
+            run(FormQueries.delete(id))
+        }
+        element <- ZIO.fromOption(Some("")).orElseFail(NotFoundException(s"Could not delete element with id $id", id.toString))
+      } yield element
+    }.dependOnDataSource().provide(dataSourceLayer)
+    formTask.map(s => if (s.isEmpty) None else Some(s"Error in deleting record by id, ${id.toString}"))
   }
 
 }
@@ -195,9 +208,27 @@ object FormQueries {
   implicit val elementSchemaMeta = schemaMeta[Form](""""form"""")
   //implicit val elementInsertMeta = insertMeta[Form](_.id)
 
+  def existsAny[T] = quote {
+    (xs: Query[T]) => (p: T => Boolean) =>
+      xs.filter(p(_)).nonEmpty
+  }
+
   val elementsQuery                   = quote(query[Form])
   def byId(id: UUID)               = quote(elementsQuery.filter(_.id == lift(id)))
-  def delete(id: UUID)               = quote(elementsQuery.filter(_.id == lift(id)).delete)
+  def byTemplateId(id: UUID)       = quote(elementsQuery.filter(_.templateId == lift(Some(id): Option[UUID])))
+  def delete(id: UUID)               = {
+    quote(elementsQuery.filter(_.id == lift(id)).delete)
+  }
+  def deleteFormTemplate(id: UUID)               = {
+    quote(elementsQuery.filter(_.templateId.isDefined).filter(_.templateId == lift(Some(id): Option[UUID])).delete)
+    /*
+    quote {
+      query[Form].filter { v1 =>
+        existsAny(query[Form])(v2 => (v1.templateId == lift(Some(id): Option[UUID])) && v2.templateId.isDefined)
+      }.delete
+    }
+     */
+  }
   def byOwner(username: String)               = quote(elementsQuery.filter(_.metadata.map(_.createdBy) == lift(Some(username): Option[String])))
   def byTitle(name: String)               = quote(elementsQuery.filter(_.title == lift(name)))
   def filter(values: Seq[FieldValue])               = quote(query[Form])

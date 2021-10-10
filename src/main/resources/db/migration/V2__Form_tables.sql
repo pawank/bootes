@@ -24,7 +24,7 @@ create index idx_form_title on form(title);
 create table "section" (
                       id uuid DEFAULT uuid_generate_v4() primary key,
                       form_id uuid not null,
-                      constraint fk_section_form_id foreign key(form_id) references form(id)
+                      constraint fk_section_form_id foreign key(form_id) references form(id) ON DELETE CASCADE
 );
 
 create table form_element (
@@ -51,7 +51,7 @@ create table form_element (
                       form_id uuid not null,
                       section_name varchar(255) not null,
                       section_seq_no integer not null,
-                      constraint fk_form_elements_form_id foreign key(form_id) references form(id)
+                      constraint fk_form_elements_form_id foreign key(form_id) references form(id)  ON DELETE CASCADE
 );
 create index idx_name_form_element on form_element(name);
 create index idx_title_form_element on form_element(title);
@@ -62,7 +62,7 @@ create table options (
                       text varchar(255) not null,
                       seq_no integer,
                       element_id uuid not null,
-                      constraint fk_element_id foreign key(element_id) references form_element(id)
+                      constraint fk_element_id foreign key(element_id) references form_element(id)  ON DELETE CASCADE
 );
 
 create table validations (
@@ -73,6 +73,6 @@ create table validations (
                       maximum int,
                       "values" varchar[],
                       element_id uuid not null,
-                      constraint fk_form_element_id foreign key(element_id) references form_element(id)
+                      constraint fk_form_element_id foreign key(element_id) references form_element(id)  ON DELETE CASCADE
 );
 create index idx_validations_title on validations (title);

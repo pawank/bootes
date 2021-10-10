@@ -142,7 +142,7 @@ object FormEndpoints extends RequestOps {
               //println(s"Form ID = $id")
               FormService.delete(UUID.fromString(id))
             }
-            r <- Task.succeed(UiResponse(requestId = serviceContext.requestId.toString, status = true, message = maybeError.getOrElse(""), code = "204", data = List.empty))
+            r <- Task.succeed(UiResponse(requestId = serviceContext.requestId.toString, status = if (maybeError.isDefined) false else true, message = maybeError.getOrElse(""), code = "204", data = List.empty))
           } yield Response.jsonString(r.toJson)
       }
       .catchAll {

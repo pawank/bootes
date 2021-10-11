@@ -63,7 +63,7 @@ case class FormServiceLive(repository: FormRepository, console: Console.Service)
     _     <- console.putStrLn(s"Forms: ${elements.map(_.title).mkString(",")}")
   } yield elements.sortBy(_.id)
 
-  override def get(id: UUID, seqNo: Int)(implicit ctx: ServiceContext): Task[CreateFormRequest] = repository.findById(id, isRefreshId = true, seqNo = 0)
+  override def get(id: UUID, seqNo: Int)(implicit ctx: ServiceContext): Task[CreateFormRequest] = repository.findById(id, isRefreshId = true, seqNo)
   override def delete(id: UUID)(implicit ctx: ServiceContext): Task[Option[String]] = repository.deleteById(id)
   override def deleteTemplateForm(id: UUID)(implicit ctx: ServiceContext): Task[Option[String]] = repository.deleteById(id)
   override def getTemplateForm(id: UUID)(implicit ctx: ServiceContext): Task[CreateFormRequest] = repository.findById(id, isRefreshId = false, seqNo = 0)

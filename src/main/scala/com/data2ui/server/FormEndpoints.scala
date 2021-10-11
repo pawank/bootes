@@ -37,18 +37,13 @@ object FormEndpoints extends RequestOps {
           for {
             //_ <- ZIO.succeed(scribe.info("Getting list of all forms"))
             _ <- log.locally(CorrelationId(serviceContext.requestId).andThen(DebugJsonLog(serviceContext.toString)))(
-              log.debug("Calling form service for fetching all forms matching with criteria")
+              log.debug(s"Calling form service for fetching all forms matching with createdBy or owned by, $createdBy")
             )
             forms <- FormService.all(createdBy)
-          } yield Response.jsonString(forms.toJson)
-        case req @ Method.GET -> Root / "columba" / "v1" / "forms" / "template" / id =>
-          implicit val serviceContext: ServiceContext = getServiceContext(jwtClaim)
-          for {
-            form <- {
-              //println(s"Form ID = $id")
-              FormService.getTemplateForm(UUID.fromString(id))
-            }
-          } yield Response.jsonString(form.toJson)
+          } yield {
+            println(forms)
+            Response.jsonString(forms.toJson)
+          }
         case req @ Method.GET -> Root / "columba" / "v1" / "forms" / id =>
           implicit val serviceContext: ServiceContext = getServiceContext(jwtClaim)
           val sectionSeqNo = (req.url.queryParams.get("seqNo") match {
@@ -58,11 +53,25 @@ object FormEndpoints extends RequestOps {
               "0"
           }).toInt
           for {
+            _ <- log.locally(CorrelationId(serviceContext.requestId).andThen(DebugJsonLog(serviceContext.toString)))(
+              log.info(s"Fetching form, $id with seqNo, $sectionSeqNo")
+            )
             userForm <- {
-              //println(s"Form ID = $id")
+              //println(s"Form ID = $id with seqNo = $sectionSeqNo")
               FormService.get(UUID.fromString(id), seqNo = sectionSeqNo)
             }
           } yield Response.jsonString(userForm.toJson)
+        case req @ Method.GET -> Root / "columba" / "v1" / "forms" / "template" / id =>
+          implicit val serviceContext: ServiceContext = getServiceContext(jwtClaim)
+          for {
+            _ <- log.locally(CorrelationId(serviceContext.requestId).andThen(DebugJsonLog(serviceContext.toString)))(
+              log.info(s"Fetching form template by id, $id")
+            )
+            form <- {
+              //println(s"Form ID = $id")
+              FormService.getTemplateForm(UUID.fromString(id))
+            }
+          } yield Response.jsonString(form.toJson)
         case req@Method.POST -> Root / "columba" / "v1" / "forms" =>
           implicit val serviceContext: ServiceContext = getServiceContext(jwtClaim)
           for {

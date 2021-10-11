@@ -47,6 +47,7 @@ case class FormRepositoryLive(dataSource: DataSource with Closeable, blocking: B
   }
 
   def getCreateFormRequest(formTask: Task[Form], isRefreshId: Boolean, sectionName: String, stepNo: Int): Task[CreateFormRequest] = {
+    //println(s"getCreateFormRequest: isRefreshId = $isRefreshId, sectionName = $sectionName and stepNo = $stepNo\n\n\n")
     val r = for {
       f <- formTask
       newFormId = if (isRefreshId) Some(UUID.randomUUID()) else None
@@ -100,7 +101,7 @@ case class FormRepositoryLive(dataSource: DataSource with Closeable, blocking: B
       case true =>
         val finalForm = for {
           form <- r
-          savedForm <- upsert(form.copy(formJson = Some(form.toJson), status = Some("pending"), metadata = form.metadata.map(m => m.copy(createdAt = Metadata.default.createdAt, updatedAt = None))), sectionName = "", stepNo = -1)
+          savedForm <- upsert(form.copy(formJson = Some(form.toJson), status = Some("pending"), metadata = form.metadata.map(m => m.copy(createdAt = Metadata.default.createdAt, updatedAt = None))), sectionName = "", stepNo = if (stepNo >= 0) stepNo -1 else stepNo)
         } yield savedForm.copy(formJson = None)
         finalForm
       case _ =>

@@ -15,7 +15,7 @@ trait FormRepository {
   def upsert(form: CreateFormRequest, sectionName: String, stepNo: Int): Task[CreateFormRequest]
   def all(owner: Option[String]): Task[Seq[Form]]
   def filter(values: Seq[FieldValue]): Task[Seq[Form]]
-  def findById(id: UUID, isRefreshId: Boolean): Task[CreateFormRequest]
+  def findById(id: UUID, isRefreshId: Boolean, seqNo: Int): Task[CreateFormRequest]
   def deleteById(id: UUID): Task[Option[String]]
   def deleteTemplateForm(id: UUID): Task[Option[String]]
   def findByTitle(code: String): Task[Seq[Form]]

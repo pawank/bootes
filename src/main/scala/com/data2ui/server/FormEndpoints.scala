@@ -41,22 +41,28 @@ object FormEndpoints extends RequestOps {
             )
             forms <- FormService.all(createdBy)
           } yield Response.jsonString(forms.toJson)
-        case Method.GET -> Root / "columba" / "v1" / "forms" / "template" / id =>
+        case req @ Method.GET -> Root / "columba" / "v1" / "forms" / "template" / id =>
           implicit val serviceContext: ServiceContext = getServiceContext(jwtClaim)
           for {
-            user <- {
+            form <- {
               //println(s"Form ID = $id")
               FormService.getTemplateForm(UUID.fromString(id))
             }
-          } yield Response.jsonString(user.toJson)
-        case Method.GET -> Root / "columba" / "v1" / "forms" / id =>
+          } yield Response.jsonString(form.toJson)
+        case req @ Method.GET -> Root / "columba" / "v1" / "forms" / id =>
           implicit val serviceContext: ServiceContext = getServiceContext(jwtClaim)
+          val sectionSeqNo = (req.url.queryParams.get("seqNo") match {
+            case Some(xs) =>
+              xs.headOption.getOrElse("0")
+            case _ =>
+              "0"
+          }).toInt
           for {
-            user <- {
+            userForm <- {
               //println(s"Form ID = $id")
-              FormService.get(UUID.fromString(id))
+              FormService.get(UUID.fromString(id), seqNo = sectionSeqNo)
             }
-          } yield Response.jsonString(user.toJson)
+          } yield Response.jsonString(userForm.toJson)
         case req@Method.POST -> Root / "columba" / "v1" / "forms" =>
           implicit val serviceContext: ServiceContext = getServiceContext(jwtClaim)
           for {

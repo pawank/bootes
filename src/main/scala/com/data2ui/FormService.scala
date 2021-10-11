@@ -32,7 +32,7 @@ trait FormService {
   def upsert(request: CreateFormRequest)(implicit ctx: ServiceContext): Task[CreateFormRequest]
   def submit(request: CreateFormRequest, sectionName: String, stepNo: Int)(implicit ctx: ServiceContext): Task[CreateFormRequest]
   def all(owner: Option[String])(implicit ctx: ServiceContext): Task[Seq[Form]]
-  def get(id: UUID)(implicit ctx: ServiceContext): Task[CreateFormRequest]
+  def get(id: UUID, seqNo: Int)(implicit ctx: ServiceContext): Task[CreateFormRequest]
   def delete(id: UUID)(implicit ctx: ServiceContext): Task[Option[String]]
   def deleteTemplateForm(id: UUID)(implicit ctx: ServiceContext): Task[Option[String]]
   def getTemplateForm(id: UUID)(implicit ctx: ServiceContext): Task[CreateFormRequest]
@@ -63,10 +63,10 @@ case class FormServiceLive(repository: FormRepository, console: Console.Service)
     _     <- console.putStrLn(s"Forms: ${elements.map(_.title).mkString(",")}")
   } yield elements.sortBy(_.id)
 
-  override def get(id: UUID)(implicit ctx: ServiceContext): Task[CreateFormRequest] = repository.findById(id, isRefreshId = true)
+  override def get(id: UUID, seqNo: Int)(implicit ctx: ServiceContext): Task[CreateFormRequest] = repository.findById(id, isRefreshId = true, seqNo = 0)
   override def delete(id: UUID)(implicit ctx: ServiceContext): Task[Option[String]] = repository.deleteById(id)
   override def deleteTemplateForm(id: UUID)(implicit ctx: ServiceContext): Task[Option[String]] = repository.deleteById(id)
-  override def getTemplateForm(id: UUID)(implicit ctx: ServiceContext): Task[CreateFormRequest] = repository.findById(id, isRefreshId = false)
+  override def getTemplateForm(id: UUID)(implicit ctx: ServiceContext): Task[CreateFormRequest] = repository.findById(id, isRefreshId = false, seqNo = 0)
 
   override def update(id: UUID, request: CreateFormRequest)(implicit ctx: ServiceContext): Task[Form] =  {
     ???

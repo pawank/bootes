@@ -157,12 +157,12 @@ case class FormRepositoryLive(dataSource: DataSource with Closeable, blocking: B
   }
 
 
-  override def findById(id: UUID, isRefreshId: Boolean): Task[CreateFormRequest] = {
+  override def findById(id: UUID, isRefreshId: Boolean, seqNo: Int): Task[CreateFormRequest] = {
     val formTask = for {
       results <- run(FormQueries.byId(id)).dependOnDataSource().provide(dataSourceLayer)
       element    <- ZIO.fromOption(results.headOption).orElseFail(NotFoundException(s"Could not find element with id $id", id.toString))
     } yield element
-    getCreateFormRequest(formTask, isRefreshId, sectionName = "", stepNo = 0)
+    getCreateFormRequest(formTask, isRefreshId, sectionName = "", stepNo = seqNo)
   }
 
   override def findByTitle(name: String): Task[Seq[Form]] = {

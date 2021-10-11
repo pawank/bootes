@@ -135,12 +135,22 @@ object FormEndpoints extends RequestOps {
             )
           } yield Response.jsonString(results.toJson)
 
-        case Method.DELETE -> Root / "columba" / "v1" / "forms" / id =>
+        case Method.DELETE -> Root / "columba" / "v1" / "forms" / "clearall" / id =>
           implicit val serviceContext: ServiceContext = getServiceContext(jwtClaim)
           for {
             maybeError <- {
               //println(s"Form ID = $id")
               FormService.delete(UUID.fromString(id))
+            }
+            r <- Task.succeed(UiResponse(requestId = serviceContext.requestId.toString, status = if (maybeError.isDefined) false else true, message = maybeError.getOrElse(""), code = "204", data = List.empty))
+          } yield Response.jsonString(r.toJson)
+
+        case Method.DELETE -> Root / "columba" / "v1" / "forms" / "template" / id =>
+          implicit val serviceContext: ServiceContext = getServiceContext(jwtClaim)
+          for {
+            maybeError <- {
+              //println(s"Form ID = $id")
+              FormService.deleteTemplateForm(UUID.fromString(id))
             }
             r <- Task.succeed(UiResponse(requestId = serviceContext.requestId.toString, status = if (maybeError.isDefined) false else true, message = maybeError.getOrElse(""), code = "204", data = List.empty))
           } yield Response.jsonString(r.toJson)

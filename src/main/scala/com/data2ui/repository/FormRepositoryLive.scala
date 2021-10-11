@@ -192,10 +192,33 @@ case class FormRepositoryLive(dataSource: DataSource with Closeable, blocking: B
           else run(FormQueries.delete(id))
         }
         results <- {
-            run(FormQueries.delete(id))
+          run(FormQueries.delete(id))
         }
         element <- {
           ZIO.fromOption(if (isTemplateExists || isFormExists) Some("") else Some(s"Not found the record by id, ${id.toString}")).orElseFail(NotFoundException(s"Could not delete record with id $id", id.toString))
+        }
+      } yield element
+    }.dependOnDataSource().provide(dataSourceLayer)
+    formTask.map(s => if (s.isEmpty) None else Some(s))
+  }
+
+
+  override def deleteTemplateForm(id: UUID): Task[Option[String]] = {
+    val formTask = ctx.transaction {
+      for {
+        templateForm <- run(FormQueries.byTemplateId(id))
+        updatedTemplateForm <- {
+          if (templateForm.headOption.isDefined) {
+            run(FormQueries.upsert(templateForm.headOption.get.copy(templateId = None)))
+          } else run(FormQueries.byTemplateId(id))
+        }
+        form <- run(FormQueries.byId(id))
+        isFormExists = form.headOption.isDefined
+        results <- {
+            run(FormQueries.delete(id))
+        }
+        element <- {
+          ZIO.fromOption(if (isFormExists) Some("") else Some(s"Not found the record by id, ${id.toString}")).orElseFail(NotFoundException(s"Could not delete record with id $id", id.toString))
         }
       } yield element
     }.dependOnDataSource().provide(dataSourceLayer)

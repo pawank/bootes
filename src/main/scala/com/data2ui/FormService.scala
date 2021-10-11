@@ -34,6 +34,7 @@ trait FormService {
   def all(owner: Option[String])(implicit ctx: ServiceContext): Task[Seq[Form]]
   def get(id: UUID)(implicit ctx: ServiceContext): Task[CreateFormRequest]
   def delete(id: UUID)(implicit ctx: ServiceContext): Task[Option[String]]
+  def deleteTemplateForm(id: UUID)(implicit ctx: ServiceContext): Task[Option[String]]
   def getTemplateForm(id: UUID)(implicit ctx: ServiceContext): Task[CreateFormRequest]
   def getByEmail(email: String)(implicit ctx: ServiceContext): Task[Form]
   def logout(id: String, inputRequest: LogoutRequest)(implicit ctx: ServiceContext): Task[ResponseMessage]
@@ -64,6 +65,7 @@ case class FormServiceLive(repository: FormRepository, console: Console.Service)
 
   override def get(id: UUID)(implicit ctx: ServiceContext): Task[CreateFormRequest] = repository.findById(id, isRefreshId = true)
   override def delete(id: UUID)(implicit ctx: ServiceContext): Task[Option[String]] = repository.deleteById(id)
+  override def deleteTemplateForm(id: UUID)(implicit ctx: ServiceContext): Task[Option[String]] = repository.deleteById(id)
   override def getTemplateForm(id: UUID)(implicit ctx: ServiceContext): Task[CreateFormRequest] = repository.findById(id, isRefreshId = false)
 
   override def update(id: UUID, request: CreateFormRequest)(implicit ctx: ServiceContext): Task[Form] =  {

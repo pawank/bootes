@@ -146,7 +146,7 @@ object Models {
 
 
   case class FormSection(title: String, seqNo: Option[Int], elements: Seq[CreateElementRequest], customerError: Option[String] = None) {
-    def makeElementsOrdered(): Seq[CreateElementRequest] = elements.zipWithIndex.map(e => e._1.copy(sectionName = Option(title), seqNo = Some(e._2)))
+    def makeElementsOrdered(): Seq[CreateElementRequest] = elements.zipWithIndex.map(e => e._1.copy(sectionName = Option(title), seqNo = if (e._1.seqNo.isDefined && e._1.seqNo.getOrElse(0) > 0) e._1.seqNo else Some(e._2)))
   }
   object FormSection{
     implicit val codec: JsonCodec[FormSection] = DeriveJsonCodec.gen[FormSection]
@@ -166,7 +166,7 @@ object Models {
                                 customerError: Option[String] = None,
                                 errors: Option[Seq[String]] = None
                               ) {
-    def getFormElements() = sections.zipWithIndex.map(s => s._1.elements.map(_.copy(sectionName = Some(s._1.title), sectionSeqNo = Some(s._2 + 1)))).flatten
+    def getFormElements() = sections.zipWithIndex.map(s => s._1.elements.map(_.copy(sectionName = Some(s._1.title), sectionSeqNo = if (s._1.seqNo.isDefined) s._1.seqNo else Some(s._2 + 1)))).flatten
 
     def hasErrors = (customerError.isDefined && !customerError.getOrElse("").isEmpty) || (sections.filter(s => !s.elements.filter(e => !e.customerError.getOrElse("").isEmpty).isEmpty).nonEmpty)
   }

@@ -55,6 +55,7 @@ case class FormServiceLive(repository: FormRepository, console: Console.Service)
   }
 
   override def submit(request: CreateFormRequest, sectionName: String, stepNo: Int)(implicit ctx: ServiceContext): Task[CreateFormRequest] = {
+    println(s"submit: request = $request, sectionName = $sectionName and stepNo = $stepNo")
     repository.upsert(request, sectionName, stepNo)
   }
 

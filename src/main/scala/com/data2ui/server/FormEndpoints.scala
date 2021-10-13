@@ -9,6 +9,7 @@ import com.bootes.server.auth.{ApiToken, LogoutRequest, Token}
 import com.data2ui.FormService
 import com.data2ui.models.Models.{CreateFormRequest, UiResponse, UploadResponse}
 import pdi.jwt.JwtClaim
+import scribe.Logger.system
 import zhttp.http._
 import zio.console._
 import zio.duration.durationInt
@@ -104,6 +105,12 @@ object FormEndpoints extends RequestOps {
           } yield Response.jsonString(results.toJson)
         case req@Method.POST -> Root / "columba" / "v1" / "upload" =>
           implicit val serviceContext: ServiceContext = getServiceContext(jwtClaim)
+          val elementId = (req.url.queryParams.get("id") match {
+            case Some(xs) =>
+              xs.headOption
+            case _ =>
+              None
+          })
           val formId = (req.url.queryParams.get("formId") match {
             case Some(xs) =>
               xs.headOption
@@ -122,29 +129,39 @@ object FormEndpoints extends RequestOps {
             _ <- log.locally(CorrelationId(serviceContext.requestId).andThen(DebugJsonLog(serviceContext.toString)))(
               log.info(s"Uploading file for form, $formId for username, $username")
             )
-            results <- {
-              import better.files._
-              import File._
-              import java.io.{File => JFile}
-              val uid = UUID.randomUUID()
-              val prefix = "files"
-              //println(s"claim: $jwtClaim")
-              val filepath = s"$filename"
-              val folder: File = s"$prefix"/s"$client"/s"$username"/s"$uid"
-              val file: File = s"$prefix"/s"$client"/s"$username"/s"$uid"/s"""$filename"""
-              req.content match {
-                case HttpData.CompleteData(data) =>
-                  //Files.write(Paths.get(filename), data.map(_.byteValue).toArray)
-                  folder.createIfNotExists(asDirectory = true, createParents = true)
-                  file.writeBytes(data.map(_.byteValue).toArray.toIterator)
-                  Task.succeed(UploadResponse(id = uid, message = "", filename = filename, path = s"${file.url.toString}"))
-                case HttpData.StreamData(chunks)      =>
-                  //println(s"chunks: $chunks")
-                  Task.succeed(UploadResponse(id = uid, message = "", filename = filename,  path = ""))
-                case HttpData.Empty              =>
-                  Task.succeed(UploadResponse(id = uid, message = "", filename = filename, path = ""))
+              results <- {
+                println(s"elementId = $elementId, formId = $formId and filename = $filename fo upload")
+              elementId match {
+                case Some(id) =>
+                  import better.files._
+                  import File._
+                  import java.io.{File => JFile}
+                  val uid = UUID.fromString(id)
+                  val prefix = "files"
+                  //println(s"claim: $jwtClaim")
+                  val filepath = s"$filename"
+                  val folder: File = s"$prefix"/s"$client"/s"$username"/s"$uid"
+                  val file: File = s"$prefix"/s"$client"/s"$username"/s"$uid"/s"""$filename"""
+                  req.content match {
+                    case HttpData.CompleteData(data) =>
+                      //Files.write(Paths.get(filename), data.map(_.byteValue).toArray)
+                      folder.createIfNotExists(asDirectory = true, createParents = true)
+                      file.writeBytes(data.map(_.byteValue).toArray.toIterator)
+                      val path = s"/columba/v1/files/${uid.toString}"
+                      Task.succeed(UploadResponse(id = Some(uid), message = "", filename = filename, path = Some(s"${path}")))
+                    case HttpData.StreamData(chunks)      =>
+                      //println(s"chunks: $chunks")
+                      Task.succeed(UploadResponse(id = Some(uid), message = "", filename = filename,  path = None))
+                    case HttpData.Empty              =>
+                      Task.succeed(UploadResponse(id = Some(uid), message = "", filename = filename, path = None))
+                  }
+                case _ =>
+                  val uid = UUID.randomUUID()
+                  println(s"Unwanted elenentId = $uid found during upload")
+                  Task.succeed(UploadResponse(id = None, message = "No element identifier provided.", filename = filename, path = None))
               }
             }
+            elementMaybe <- FormService.uploadFile(results.id.getOrElse(UUID.randomUUID()), None, results.path)
             _ <- log.locally(CorrelationId(serviceContext.requestId).andThen(DebugJsonLog(serviceContext.toString)))(
               log.info(s"Uploaded file, ${results.filename} for form, $formId for username, $username")
             )

@@ -227,6 +227,26 @@ case class FormRepositoryLive(dataSource: DataSource with Closeable, blocking: B
     } yield xs
   }
 
+  override def uploadFile(id: UUID, formId: Option[UUID], filename: Option[String]): Task[CreateElementRequest] = {
+    println(s"uploadFile: id = $id, formId = $formId and filename = $filename")
+    for {
+      results <- run(ElementQueries.byId(id)).dependOnDataSource().provide(dataSourceLayer)
+      r <- {
+        val elt = Element.toCreateElementRequest(results.headOption.get, Seq.empty, None).copy(values = Seq(filename.getOrElse("")))
+        Task.succeed(elt)
+      }
+      xs <- ZIO.effect(r).orElseFail(NotFoundException(s"Could not find elements with input criteria", id.toString))
+    } yield xs
+  }
+
+  override def uploadFile(element: CreateElementRequest): Task[CreateElementRequest] = {
+    val elt = CreateElementRequest.toElement(element)
+    for {
+      results <- run(ElementQueries.upsert(elt)).dependOnDataSource().provide(dataSourceLayer)
+      xs <- ZIO.effect(element).orElseFail(NotFoundException(s"Could save uploaded record with id, ", element.id.toString))
+    } yield xs
+  }
+
   override def deleteById(id: UUID): Task[Option[String]] = {
     val formTask = ctx.transaction {
       for {

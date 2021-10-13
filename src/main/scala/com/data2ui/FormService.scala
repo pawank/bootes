@@ -4,7 +4,7 @@ import com.bootes.dao.{Metadata, ResponseMessage}
 import com.bootes.dao.keycloak.Models.{ApiResponseError, ApiResponseSuccess, Attributes, Email, KeycloakUser, Phone, ServiceContext}
 import com.bootes.dao.repository.{JSONB, UserRepository}
 import com.bootes.server.auth.{ApiToken, LogoutRequest}
-import com.data2ui.models.Models.{CreateFormRequest, Form}
+import com.data2ui.models.Models.{CreateElementRequest, CreateFormRequest, Form}
 import com.data2ui.repository.FormRepository
 import io.getquill.Embedded
 import io.scalaland.chimney.dsl.TransformerOps
@@ -36,6 +36,8 @@ trait FormService {
   def delete(id: UUID)(implicit ctx: ServiceContext): Task[Option[String]]
   def deleteTemplateForm(id: UUID)(implicit ctx: ServiceContext): Task[Option[String]]
   def getTemplateForm(id: UUID)(implicit ctx: ServiceContext): Task[CreateFormRequest]
+  def uploadFile(id: UUID, formId: Option[UUID], filename: Option[String])(implicit ctx: ServiceContext): Task[CreateElementRequest]
+  def uploadFile(element: CreateElementRequest)(implicit ctx: ServiceContext): Task[CreateElementRequest]
   def getByEmail(email: String)(implicit ctx: ServiceContext): Task[Form]
   def logout(id: String, inputRequest: LogoutRequest)(implicit ctx: ServiceContext): Task[ResponseMessage]
 }
@@ -74,6 +76,9 @@ case class FormServiceLive(repository: FormRepository, console: Console.Service)
   }
 
   override def getByEmail(email: String)(implicit ctx: ServiceContext): Task[Form] = ???
+  
+  override def uploadFile(id: UUID, formId: Option[UUID], filename: Option[String])(implicit ctx: ServiceContext): Task[CreateElementRequest] = repository.uploadFile(id, formId, filename)
+  override def uploadFile(element: CreateElementRequest)(implicit ctx: ServiceContext): Task[CreateElementRequest] = repository.uploadFile(element)
 
   def logout(id: String, inputRequest: LogoutRequest)(implicit ctx: ServiceContext): Task[ResponseMessage] = Task.succeed(ResponseMessage.makeSuccess(200, ""))
 }

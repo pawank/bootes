@@ -1,6 +1,7 @@
 package com.data2ui.repository
 
-import com.data2ui.models.Models.{CreateFormRequest, Form, Options}
+import com.bootes.dao.keycloak.Models.ServiceContext
+import com.data2ui.models.Models.{CreateElementRequest, CreateFormRequest, Form, Options}
 import io.getquill.context.ZioJdbc.QDataSource
 import zio._
 import zio.macros.accessible
@@ -19,6 +20,8 @@ trait FormRepository {
   def deleteById(id: UUID): Task[Option[String]]
   def deleteTemplateForm(id: UUID): Task[Option[String]]
   def findByTitle(code: String): Task[Seq[Form]]
+  def uploadFile(id: UUID, formId: Option[UUID], filename: Option[String]): Task[CreateElementRequest]
+  def uploadFile(element: CreateElementRequest): Task[CreateElementRequest]
 }
 
 object FormRepository {

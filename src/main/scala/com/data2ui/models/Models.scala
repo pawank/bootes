@@ -131,6 +131,8 @@ object Models {
   object CreateElementRequest{
     implicit val codec: JsonCodec[CreateElementRequest] = DeriveJsonCodec.gen[CreateElementRequest]
     def toElement(element: CreateElementRequest) = element.into[Element].transform.copy(id = element.id, seqNo = element.seqNo)
+    def makeFileElement(id: UUID, formId: UUID) = CreateElementRequest(id = id, seqNo = None, name = "file", title = "", description = None,
+      values = Seq.empty, `type` = "String", formId = Some(formId), validations = Seq.empty, sectionName = None, sectionSeqNo = None)
   }
 
   case class DesignProperties (
@@ -218,8 +220,9 @@ object Models {
     implicit val codec: JsonCodec[UiResponse] = DeriveJsonCodec.gen[UiResponse]
   }
 
-  case class UploadResponse(id: UUID, message: String, filename: String, path: String)
+  case class UploadResponse(id: Option[UUID], message: String, filename: String, path: Option[String] = None)
   object UploadResponse {
     implicit val codec: JsonCodec[UploadResponse] = DeriveJsonCodec.gen[UploadResponse]
   }
+
 }

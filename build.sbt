@@ -117,6 +117,13 @@ libraryDependencies ++= Seq(
   "dev.zio"                       %% "zio-test-magnolia"        % zioVersion % Test
 ) ++ opentracingLibs ++ opentelemetryLibs ++ opencensusLibs
 
+
+//enablePlugins(GraalVMNativeImagePlugin)
+//enablePlugins(UniversalPlugin)
+//graalVMNativeImageGraalVersion := Some("20.0.0-java11")
+
+
+
 testFrameworks += new TestFramework("zio.test.sbt.ZTestFramework")
 
 lazy val app = (project in file("."))

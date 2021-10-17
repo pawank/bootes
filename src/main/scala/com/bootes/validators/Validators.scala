@@ -48,7 +48,7 @@ object Validators {
 123.456.7890
 +91 (123) 456-7890
    */
-  def validatePhone(value: String, required: Option[Boolean] = None):Validation[String, Phone] = matchesRegex("""^(\+\d{1,2}\s)?\(?\d{3}\)?[\s.-]?\d{3}[\s.-]?\d{4}$""").test(value) match {
+  def validatePhone(value: String, required: Option[Boolean] = Some(true)):Validation[String, Phone] = matchesRegex("""^(\+\d{1,2}\s)?\(?\d{3}\)?[\s.-]?\d{3}[\s.-]?\d{4}$""").test(value) match {
     case true => Validation.succeed(Phone(value))
     case false =>
       required match {
@@ -59,7 +59,7 @@ object Validators {
       }
   }
 
-  def validateEmail(value: String, required: Option[Boolean] = None):Validation[String, Email] = emailValidator.isValid(value) match {
+  def validateEmail(value: String, required: Option[Boolean] = Some(true)):Validation[String, Email] = emailValidator.isValid(value) match {
     case true => Validation.succeed(Email(value))
     case false =>
       required match {
@@ -69,7 +69,7 @@ object Validators {
       }
   }
 
-  def validateName(value: String, required: Option[Boolean] = None):Validation[String, String] = isNonEmptyString.test(value) && (matchesRegex("""^[-'a-zA-ZÀ-ÖØ-öø-ſ]+$""").test(value)) match {
+  def validateName(value: String, required: Option[Boolean] = Some(true)):Validation[String, String] = isNonEmptyString.test(value) && (matchesRegex("""^[-'a-zA-ZÀ-ÖØ-öø-ſ]+$""").test(value)) match {
     case true => Validation.succeed(value)
     case false =>
       required match {
@@ -79,25 +79,24 @@ object Validators {
       }
   }
 
-  def validateToken(value: String, required: Option[Boolean] = None):Validation[String, Token] = required match {
+  def validateToken(value: String, required: Option[Boolean] = Some(true)):Validation[String, Token] = required match {
     case Some(true) =>
       Validation.fromPredicateWith(s"Token value seems to be invalid, $value")(Token(value))(token => isNonEmptyString.test(value) && (isGreaterThan(1000) && isLessThan(2000)).test(value.size))
     case _ =>
       Validation.succeed(Token(value))
   }
 
-  def validateTitle(value: String, required: Option[Boolean] = None):Validation[String, String] =
+  def validateTitle(value: String, required: Option[Boolean] = Some(true)):Validation[String, String] =
     required match {
       case Some(true) =>
         Validation.fromPredicateWith(s"Title cannot be empty, $value")(value)(token => isNonEmptyString.test(value) && (isGreaterThan(2) && isLessThan(200)).test(value.size))
       case _ => Validation.succeed(value)
     }
 
-  def validateValidationsElement(values: Seq[String], value: Validations, required: Option[Boolean] = None):Validation[String, Validations] = {
+  def validateValidationsElement(values: Seq[String], value: Validations, required: Option[Boolean] = Some(true)):Validation[String, Validations] = {
     //println(s"validateValidationsElement: values = $values with required = $required")
     def check[T](values: Seq[String], predicate: String => Boolean): (Boolean, String) = {
-      required match {
-        case Some(true) =>
+          //val isValid = (required.getOrElse(true) == false) && (values.isEmpty)
           var allErrors: scala.collection.mutable.Buffer[String] = scala.collection.mutable.Buffer.empty
           val (newVals: Seq[String], vals: Seq[String], originalSize: Int) =  (values.filter(x => {
             val cond = predicate(x)
@@ -109,10 +108,6 @@ object Validators {
           }), values, values.size)
           //println(s"newVals = $newVals, vals = $vals and size = $originalSize")
           (values.nonEmpty && (newVals.size == originalSize), if (allErrors.isEmpty) "" else "(" + allErrors.mkString(", ") + ")")
-        case _ =>
-          (true, "")
-      }
-
     }
 
     def makeDisplayableValue(value: String) = if (value.isEmpty) "<empty>" else value
@@ -129,7 +124,16 @@ object Validators {
         if (result._1) Validation.succeed(value) else Validation.fail(s"`type`, number mismatch for the values, ${makeDisplayableValue(result._2)} provided")
       case "string" | "String" =>
         val result = !values.map(!_.isEmpty).isEmpty
-        if (result) Validation.succeed(value) else Validation.fail(s"`type` mismatch for the empty values provided")
+        val minV = value.minimum.getOrElse(0)
+        val maxV = value.maximum.getOrElse(0)
+        val minMaxCheck = if (minV > 0 || maxV > 0) values.filter(_.nonEmpty).filter(m => m.size >= minV && m.size <= maxV).nonEmpty else true
+        //println(s"result = $result for value = $value\n\n\n\n")
+        if (result && minMaxCheck) Validation.succeed(value) else {
+          if (!minMaxCheck)
+            Validation.fail(s"Please check the minimum and maximum size of the value.")
+            else
+          Validation.fail(s"`type` mismatch for the empty values provided")
+        }
       case "bool" | "boolean" | "Boolean" =>
         val result = check(values, _.toBoolean)
         if (result._1) Validation.succeed(value) else Validation.fail(s"`type`, boolean mismatch for the values, ${makeDisplayableValue(result._2)} provided")
@@ -169,6 +173,12 @@ object Validators {
         Validation.succeed(value)
     }
   }
+
+  def filterNonEmptyValidations(validations: Seq[Validations]): Seq[Validations] = {
+    //validations.filter(v => v.values.isDefined && (v.values.getOrElse(Seq.empty).nonEmpty))
+    validations.filter(v => v.values.isDefined && (v.values.getOrElse(Seq.empty).nonEmpty || (v.minimum.getOrElse(0) > 0) || (v.maximum.getOrElse(0) > 0)))
+  }
+
   def validateFormSection(value: FormSection):Validation[FormSection, FormSection] = {
       var allErrors: scala.collection.mutable.Buffer[String] = scala.collection.mutable.Buffer.empty
       val elements: Seq[CreateElementRequest] = value.elements.map(e => {
@@ -179,9 +189,9 @@ object Validators {
           case "select" | "multiselect" | "Select" | "Multiselect" =>
             val opts = e.options.getOrElse(Seq.empty)
             val values = opts.map(x => x.value)
-            e.validations.map(validator => validateValidationsElement(values, validator, e.required).toEither)
+            filterNonEmptyValidations(e.validations).map(validator => validateValidationsElement(values, validator, e.required).toEither)
           case _ =>
-            e.validations.map(validator => validateValidationsElement(e.values, validator, e.required).toEither)
+            filterNonEmptyValidations(e.validations).map(validator => validateValidationsElement(e.values, validator, e.required).toEither)
         }
         val filteredResults: Seq[Either[NonEmptyChunk[String], Validations]] = result.filter(r => r.isLeft)
         val errors: Seq[String] = Seq(title, sectionName, chkType).filter(r => {

@@ -25,10 +25,10 @@ import java.util.UUID
 
 object FormEndpoints extends RequestOps {
   val form: ApiToken => Http[Has[FormService] with Console with Logging, HttpError, Request, UResponse] = jwtClaim => {
+    implicit val serviceContext: ServiceContext = getServiceContext(jwtClaim)
     Http
       .collectM[Request] {
         case req @ Method.GET -> Root / "columba" / "v1" / "forms" / "search" =>
-          implicit val serviceContext: ServiceContext = getServiceContext(jwtClaim)
           val createdBy = req.url.queryParams.get("createdBy") match {
             case Some(xs) =>
               xs.headOption
@@ -46,7 +46,6 @@ object FormEndpoints extends RequestOps {
             Response.jsonString(forms.toJson)
           }
         case req @ Method.GET -> Root / "columba" / "v1" / "forms" / id =>
-          implicit val serviceContext: ServiceContext = getServiceContext(jwtClaim)
           val sectionSeqNo = (req.url.queryParams.get("seqNo") match {
             case Some(xs) =>
               xs.headOption.getOrElse("0")
@@ -63,7 +62,6 @@ object FormEndpoints extends RequestOps {
             }
           } yield Response.jsonString(userForm.toJson)
         case req @ Method.GET -> Root / "columba" / "v1" / "forms" / "template" / id =>
-          implicit val serviceContext: ServiceContext = getServiceContext(jwtClaim)
           for {
             _ <- log.locally(CorrelationId(serviceContext.requestId).andThen(DebugJsonLog(serviceContext.toString)))(
               log.info(s"Fetching form template by id, $id")
@@ -74,7 +72,6 @@ object FormEndpoints extends RequestOps {
             }
           } yield Response.jsonString(form.toJson)
         case req@Method.POST -> Root / "columba" / "v1" / "forms" =>
-          implicit val serviceContext: ServiceContext = getServiceContext(jwtClaim)
           for {
             request <- extractBodyFromJson[CreateFormRequest](req)
             results <- {
@@ -93,7 +90,6 @@ object FormEndpoints extends RequestOps {
             }
           } yield Response.jsonString(results.toJson)
         case req@Method.POST -> Root / "columba" / "v1" / "forms" / sectionName / stepNo =>
-          implicit val serviceContext: ServiceContext = getServiceContext(jwtClaim)
           for {
             request <- extractBodyFromJson[CreateFormRequest](req)
             results <- {
@@ -104,7 +100,6 @@ object FormEndpoints extends RequestOps {
             }
           } yield Response.jsonString(results.toJson)
         case req@Method.POST -> Root / "columba" / "v1" / "upload" =>
-          implicit val serviceContext: ServiceContext = getServiceContext(jwtClaim)
           val elementId = (req.url.queryParams.get("id") match {
             case Some(xs) =>
               xs.headOption
@@ -168,7 +163,6 @@ object FormEndpoints extends RequestOps {
           } yield Response.jsonString(results.toJson)
 
         case Method.DELETE -> Root / "columba" / "v1" / "forms" / "clearall" / id =>
-          implicit val serviceContext: ServiceContext = getServiceContext(jwtClaim)
           for {
             maybeError <- {
               //println(s"Form ID = $id")
@@ -178,7 +172,6 @@ object FormEndpoints extends RequestOps {
           } yield Response.jsonString(r.toJson)
 
         case Method.DELETE -> Root / "columba" / "v1" / "forms" / "template" / id =>
-          implicit val serviceContext: ServiceContext = getServiceContext(jwtClaim)
           for {
             maybeError <- {
               //println(s"Form ID = $id")
@@ -191,8 +184,24 @@ object FormEndpoints extends RequestOps {
         case NotFoundException(msg, id) =>
           Http.fail(HttpError.NotFound(Root / "columba" / "v1" / "forms" / id.toString))
         case ex: Throwable =>
-          Http.fail(HttpError.InternalServerError(msg = ex.getMessage, cause = None))
-        case err => Http.fail(HttpError.InternalServerError(msg = err.toString))
+          val error = ex.getMessage
+          val finalError = if (error.contains("(missing)")) {
+            val tokens = error.replaceAll("""\(missing\)""","").split("""\.""")
+            if (tokens.size >= 2) s"""${tokens(1)} is missing""" else tokens(0)
+          } else error
+          println(s"Forms Exception: $finalError")
+          Http.fail(HttpError.InternalServerError(msg = finalError, cause = None))
+        case err =>
+          val error = err.toString
+          println(error)
+          if (error.contains("(missing)")) {
+            val tokens = error.replaceAll("""\(missing\)""","")
+            val finalError = s"""${tokens.substring(1)} is missing"""
+            println(s"Forms ERROR: $finalError")
+            Http.fail(HttpError.BadRequest(msg = finalError))
+          } else {
+            Http.fail(HttpError.InternalServerError(msg = error))
+          }
       }
   }
 

@@ -230,7 +230,15 @@ object AuthenticationApp extends RequestOps {
           val msg = s"Failed login for user: $user."
           Http.fromEffect(ZIO.succeed(Response.HttpResponse(Status.UNAUTHORIZED, List.empty, HttpData.fromByteBuf(Unpooled.wrappedBuffer(msg.getBytes)))) @@ MetricAspect.count("loginErrorCounter"))
         case ex@_ =>
-          Http.fail(HttpError.Unauthorized(s"Login Failed with error, ${ex.toString}"))
+          val error = ex.toString
+          if (error.contains("(missing)")) {
+            val tokens = error.replaceAll("""\(missing\)""","").split(""" \.""")
+            val finalError = if (tokens.size >= 2) tokens(1) else tokens(0)
+            Http.fail(HttpError.Unauthorized(s"Login Failed with error: ${finalError} missing."))
+          }
+          else {
+            Http.fail(HttpError.Unauthorized(s"Login Failed with error: ${error}"))
+          }
       }
   }
 

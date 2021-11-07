@@ -81,8 +81,24 @@ object UserEndpoints extends RequestOps {
         case NotFoundException(msg, id) =>
           Http.fail(HttpError.NotFound(Root / "bootes" / "v1" / "users" / id.toString))
         case ex: Throwable =>
-          Http.fail(HttpError.InternalServerError(msg = ex.getMessage, cause = None))
-        case err => Http.fail(HttpError.InternalServerError(msg = err.toString))
+          val error = ex.getMessage
+          val finalError = if (error.contains("(missing)")) {
+            val tokens = error.replaceAll("""\(missing\)""","").split("""\.""")
+            if (tokens.size >= 2) s"""${tokens(1)} is missing""" else tokens(0)
+          } else error
+          println(s"User Exception: $finalError")
+          Http.fail(HttpError.InternalServerError(msg = finalError, cause = None))
+        case err =>
+          val error = err.toString
+          println(error)
+          if (error.contains("(missing)")) {
+            val tokens = error.replaceAll("""\(missing\)""","")
+            val finalError = s"""${tokens} is missing"""
+            println(s"User ERROR: $finalError")
+            Http.fail(HttpError.BadRequest(msg = finalError))
+          } else {
+            Http.fail(HttpError.InternalServerError(msg = error))
+          }
       }
   }
 }

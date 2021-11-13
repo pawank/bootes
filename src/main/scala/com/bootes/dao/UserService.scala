@@ -276,15 +276,20 @@ case class KeycloakUserServiceLive(console: Console.Service) extends UserService
       }
     } yield output
     result
-      .mapError(someError =>
-              someError match {
-                case Right(v) =>
-                    //new RuntimeException(s"Success: $v")
-                  UserAlreadyExists(v.toString)
-                  case Left(e) =>
-                    //new RuntimeException(s"Error: $e")
-                    UserAlreadyExists(e.toString)
+      .mapError(someError => {
+              if (someError.toString.contains("User not found")) {
+                UserDoesNotExists(someError.toString())
+              } else {
+                someError match {
+                  case Right(v) =>
+                      //new RuntimeException(s"Success: $v")
+                    UserAlreadyExists(v.toString)
+                    case Left(e) =>
+                      //new RuntimeException(s"Error: $e")
+                      UserAlreadyExists(e.toString)
+                  }
                 }
+            }
         )
       .provideLayer(Clock.live ++ UserServer.logLayer ++ system.System.live)
         //result.mapError(e => Left(e)).provideLayer(Clock.live ++ UserServer.logLayer ++ system.System.live)

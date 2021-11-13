@@ -1,6 +1,6 @@
 package com.bootes.server
 
-import com.bootes.dao.keycloak.Models.{KeyValue, QueryParams, RequestParsingError, ServiceContext, UserAlreadyExists}
+import com.bootes.dao.keycloak.Models.{KeyValue, QueryParams, RequestParsingError, ServiceContext, UserAlreadyExists, UserDoesNotExists}
 import com.bootes.dao.repository.NotFoundException
 import com.bootes.dao.{CreateUserRequest, ResponseMessage, UserService}
 import com.bootes.dao.{CreateUserRequest, UserService}
@@ -20,7 +20,7 @@ import java.util.UUID
 
 object UserEndpoints extends RequestOps {
 
-  val user: ApiToken => Http[Has[UserService] with Console with Logging, HttpError, Request, UResponse] = jwtClaim => {
+  val user: ApiToken => Http[Has[UserService] with Console with Logging with zemail.email.Email, HttpError, Request, UResponse] = jwtClaim => {
     scribe.debug(s"Claim found for ${jwtClaim.name}")
     Http
       .collectM[Request] {
@@ -62,6 +62,9 @@ object UserEndpoints extends RequestOps {
           for {
             request <- extractBodyFromJson[CreateUserRequest](req)
             results <- UserService.upsert(request, methodType = Some("post"))(serviceContext.copy(requestId = request.requestId.map(UUID.fromString(_)).getOrElse(serviceContext.requestId)))
+            notify <- {
+              com.bootes.utils.EmailUtils.send("admin@rapidor.co", results.contactMethod.map(_.email1.getOrElse("admin@rapidor.co")).getOrElse("admin@rapidor.co"), "test", com.bootes.utils.EmailUtils.welcomeTemplate)
+            }
           } yield Response.jsonString(results.toJson)
         case req@Method.POST -> Root / "bootes" / "v1" / "users" / "logout" =>
           implicit val serviceContext: ServiceContext = getServiceContext(jwtClaim)
@@ -74,6 +77,8 @@ object UserEndpoints extends RequestOps {
           } yield Response.jsonString(results.toJson)
       }
       .catchAll {
+        case UserDoesNotExists(msg) =>
+          Http.fail(HttpError.BadRequest(msg))
         case UserAlreadyExists(msg) =>
           Http.fail(HttpError.Conflict(msg))
         case RequestParsingError(msg) =>

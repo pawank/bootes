@@ -91,7 +91,7 @@ object UserServer extends App {
   }
 
 
-  val userEndpoints: Http[Has[UserService] with Clock with Console with Logging with system.System, HttpError, Request, Response[Has[UserService]  with Console with Logging, HttpError]] =
+  val userEndpoints: Http[Has[UserService] with Clock with Console with Logging with system.System with zemail.email.Email, HttpError, Request, Response[Has[UserService]  with Console with Logging with zemail.email.Email, HttpError]] =
     CORS(
       AuthenticationApp.authenticate(HttpApp.forbidden("Oops! You are not authorised to access the requested feature. Please check your credentials."), UserEndpoints.user),
       config = getCorsConfig()
@@ -148,12 +148,16 @@ object UserServer extends App {
   def status(service: ZLayer[Clock, Throwable, OpenTracing]): HttpApp[Clock, Throwable] =
     Http.collectM { case request @ Method.GET -> Root / "status" =>
       val headers = request.headers.map(h => h.name.toString -> h.value.toString).toMap
+      //com.bootes.utils.EmailUtils.send("admin@rapidor.co", "pawan@acelrtech.com", "test", com.bootes.utils.EmailUtils.welcomeTemplate) &>
+      //com.bootes.utils.EmailUtils.builder.buildLayer
       ZIO.unit
         .spanFrom(HttpHeadersFormat, new TextMapAdapter(headers.asJava), "/status")
         .as(Response.jsonString(Status.up("backend").toJson))
         .inject(service, Clock.live)
     }
-
+  //Needed for Courier mail
+  import zemail.email
+  import zemail.email.MailerOps
   val program: ZIO[Any with Console with Has[AppConfig], Throwable, Nothing] = {
     import sttp.client3._
     import sttp.client3.asynchttpclient.zio._
@@ -166,7 +170,7 @@ object UserServer extends App {
       service = makeService(conf.zipkinTracer.host, "bootes")
       _ <- putStrLn(s"Starting the server at port, $backendPort")
       server = Server.port(backendPort) ++ Server.app(status(service) +++ getVersion(rootPath) +++ app) ++ Server.maxRequestSize(4194304)
-      s <- server.start.inject(ServerChannelFactory.auto, EventLoopGroup.auto(0), Clock.live, PrometheusClient.live, Console.live, ZioQuillContext.dataSourceLayer, OptionsRepository.layer, ValidationsRepository.layer, FormElementsRepository.layer, logLayer, AsyncHttpClientZioBackend.layer(), UserService.layerKeycloakService, FormRepository.layer, FormService.layer, system.System.live) @@ aspServerStartCountAll
+      s <- server.start.inject(ServerChannelFactory.auto, EventLoopGroup.auto(0), Clock.live, PrometheusClient.live, Console.live, ZioQuillContext.dataSourceLayer, OptionsRepository.layer, ValidationsRepository.layer, FormElementsRepository.layer, logLayer, AsyncHttpClientZioBackend.layer(), UserService.layerKeycloakService, FormRepository.layer, FormService.layer, system.System.live, com.bootes.utils.EmailUtils.builder.buildLayer) @@ aspServerStartCountAll
       //s <- server.start.inject(ServerChannelFactory.auto, EventLoopGroup.auto(0), Clock.live, configLayer, JaegerTracer.live, Tracing.live, PrometheusClient.live, Console.live, ZioQuillContext.dataSourceLayer, OptionsRepository.layer, ValidationsRepository.layer, FormElementsRepository.layer, logLayer, AsyncHttpClientZioBackend.layer(), UserService.layerKeycloakService, FormRepository.layer, FormService.layer, system.System.live) @@ aspServerStartCountAll
       _ <- putStrLn(s"Shutting down the server at port, $backendPort")
     } yield s

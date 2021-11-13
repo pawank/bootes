@@ -112,6 +112,7 @@ libraryDependencies ++= Seq(
   "io.grpc" % "grpc-netty-shaded" % "1.40.1",
   "io.grpc"                       % "grpc-netty-shaded"             % "1.40.1",
   "com.github.pathikrit"          %% "better-files"             % betterfiles, 
+  "dev.doamaral"                  %% "zemail"                   % "0.1.0",
   "dev.zio"                       %% "zio-test"                 % zioVersion % Test,
   "dev.zio"                       %% "zio-test-sbt"             % zioVersion % Test,
   "dev.zio"                       %% "zio-test-magnolia"        % zioVersion % Test

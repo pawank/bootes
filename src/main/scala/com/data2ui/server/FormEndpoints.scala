@@ -42,7 +42,7 @@ object FormEndpoints extends RequestOps {
             )
             forms <- FormService.all(createdBy)
           } yield {
-            println(forms)
+            //println(forms)
             Response.jsonString(forms.toJson)
           }
         case req @ Method.GET -> Root / "columba" / "v1" / "forms" / id =>
@@ -82,6 +82,7 @@ object FormEndpoints extends RequestOps {
                   false
               }
               val orderedReq = request.copy(sections = request.sections.map(s => s.copy(elements = s.makeElementsOrdered())))
+              //println(s"Ordered req = $orderedReq\n\n")
               val updatedMetadata = orderedReq.metadata.map(m => m.copy(createdBy = jwtClaim.username.getOrElse(""), updatedBy = jwtClaim.username))
               if (validation) {
                 val validatedForm = CreateFormRequest.validate(orderedReq.copy(metadata = updatedMetadata))
@@ -171,11 +172,18 @@ object FormEndpoints extends RequestOps {
             r <- Task.succeed(UiResponse(requestId = serviceContext.requestId.toString, status = if (maybeError.isDefined) false else true, message = maybeError.getOrElse(""), code = "204", data = List.empty))
           } yield Response.jsonString(r.toJson)
 
-        case Method.DELETE -> Root / "columba" / "v1" / "forms" / "template" / id =>
+        case req @ Method.DELETE -> Root / "columba" / "v1" / "forms" / "template" / id =>
+
+          val forced = (req.url.queryParams.get("forced") match {
+            case Some(xs) =>
+              xs.headOption.map(_.toBoolean)
+            case _ =>
+              None
+          })
           for {
             maybeError <- {
               //println(s"Form ID = $id")
-              FormService.deleteTemplateForm(UUID.fromString(id))
+              FormService.deleteTemplateForm(UUID.fromString(id), forced)
             }
             r <- Task.succeed(UiResponse(requestId = serviceContext.requestId.toString, status = if (maybeError.isDefined) false else true, message = maybeError.getOrElse(""), code = "204", data = List.empty))
           } yield Response.jsonString(r.toJson)
@@ -193,7 +201,7 @@ object FormEndpoints extends RequestOps {
           Http.fail(HttpError.InternalServerError(msg = finalError, cause = None))
         case err =>
           val error = err.toString
-          println(error)
+          println(s"Forms Uncatched Exception: $error")
           if (error.contains("(missing)")) {
             val tokens = error.replaceAll("""\(missing\)""","")
             val finalError = s"""${tokens.substring(1)} is missing"""

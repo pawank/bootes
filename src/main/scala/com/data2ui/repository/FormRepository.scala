@@ -18,7 +18,7 @@ trait FormRepository {
   def filter(values: Seq[FieldValue]): Task[Seq[Form]]
   def findById(id: UUID, isRefreshId: Boolean, seqNo: Int): Task[CreateFormRequest]
   def deleteById(id: UUID): Task[Option[String]]
-  def deleteTemplateForm(id: UUID): Task[Option[String]]
+  def deleteTemplateForm(id: UUID, forced: Option[Boolean]): Task[Option[String]]
   def findByTitle(code: String): Task[Seq[Form]]
   def uploadFile(id: UUID, formId: Option[UUID], filename: Option[String]): Task[CreateElementRequest]
   def uploadFile(element: CreateElementRequest): Task[CreateElementRequest]

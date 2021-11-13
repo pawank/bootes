@@ -63,7 +63,10 @@ object UserEndpoints extends RequestOps {
             request <- extractBodyFromJson[CreateUserRequest](req)
             results <- UserService.upsert(request, methodType = Some("post"))(serviceContext.copy(requestId = request.requestId.map(UUID.fromString(_)).getOrElse(serviceContext.requestId)))
             notify <- {
-              com.bootes.utils.EmailUtils.send("admin@rapidor.co", results.contactMethod.map(_.email1.getOrElse("admin@rapidor.co")).getOrElse("admin@rapidor.co"), "test", com.bootes.utils.EmailUtils.welcomeTemplate)
+              val url = "https://forms.rapidor.co"
+              val body = com.bootes.utils.EmailUtils.welcomeTemplate.replaceAll("___FULLNAME___", results.name.firstName).replaceAll("___DOMAIN___", url)
+              //println(s"final email body = $body")
+              com.bootes.utils.EmailUtils.send("Customer Care <admin@rapidor.co>", results.contactMethod.map(_.email1.getOrElse("admin@rapidor.co")).getOrElse("admin@rapidor.co"), "Welcome", body)
             }
           } yield Response.jsonString(results.toJson)
         case req@Method.POST -> Root / "bootes" / "v1" / "users" / "logout" =>

@@ -171,7 +171,7 @@ trait HttpClient {
             val req = formType match {
               case FormUrlEncoded =>
                 val payload = com.bootes.utils.getCCParams(inputRequest)
-                //println(s"payload = $payload")
+                //println(s"payload = $payload for url = $url")
                 log.locally(CorrelationId(serviceContext.requestId).andThen(DebugJsonLog(payload.mkString)))(
                   log.info(s"$url as $formType with method type, $methodType")
                 )
@@ -193,7 +193,7 @@ trait HttpClient {
                 }
               case FormUsingJson =>
                 val payload = inputRequest.toJson
-                //println(s"JSON payload = $payload")
+                //println(s"FormUsingJson payload = $payload for url = $url")
                 log.locally(CorrelationId(serviceContext.requestId).andThen(DebugJsonLog(payload)))(
                   log.info(s"$url as $formType with method type, $methodType")
                 )
@@ -210,6 +210,7 @@ trait HttpClient {
               val statusCode = r.code.code >= 200 && r.code.code < 300
               r.body match {
                 case Right(data) =>
+                  //println(s"data = $data")
                   val xs = r.code.code match {
                     case 201 =>
                       """{"message":"Created"}""".fromJson[U]

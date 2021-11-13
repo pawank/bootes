@@ -235,6 +235,7 @@ case class KeycloakUserServiceLive(console: Console.Service) extends UserService
 
   override def upsert(request: CreateUserRequest, methodType:Option[String])(implicit serviceContext: ServiceContext): ZIO[Any, Serializable, User] = {
     val inputRequest = CreateUserRequest.toKeycloakUser(request)
+    //println(s"User inputRequest = $inputRequest")
       val result = for {
       configValue <- keycloakConfigValue
       _ <- log.locally(CorrelationId(serviceContext.requestId).andThen(DebugJsonLog(configValue.toString)))(
@@ -244,7 +245,10 @@ case class KeycloakUserServiceLive(console: Console.Service) extends UserService
       res <- {
         methodType match {
           case Some(m) =>
-            val url = s"${configValue.keycloak.url}/${configValue.keycloak.adminUsername}/realms/${configValue.keycloak.realm.getOrElse("")}/users/${request.id.getOrElse(UUID.randomUUID.toString).toString}"
+              val postUrl = s"${configValue.keycloak.url}/${configValue.keycloak.adminUsername}/realms/${configValue.keycloak.realm.getOrElse("")}/users"
+            val url = {
+              if (inputRequest.id.isDefined) s"$postUrl/${request.id.getOrElse(UUID.randomUUID.toString).toString}" else postUrl
+            }
             log.locally(CorrelationId(serviceContext.requestId).andThen(DebugJsonLog(url)))(
               log.info(s"Upsert call to $url with method = $methodType")
             ) &>
@@ -278,15 +282,16 @@ case class KeycloakUserServiceLive(console: Console.Service) extends UserService
     result
       .mapError(someError => {
               if (someError.toString.contains("User not found")) {
-                UserDoesNotExists(someError.toString())
-              } else {
+                UserDoesNotExists(inputRequest.email.getOrElse(""))
+              } else if (someError.toString.contains("User exists with same username")) {
+                    UserAlreadyExists(s"""User already exists: ${inputRequest.email.getOrElse("")}""")
+              }
+              else {
                 someError match {
                   case Right(v) =>
-                      //new RuntimeException(s"Success: $v")
-                    UserAlreadyExists(v.toString)
+                    UserAlreadyExists(s"${inputRequest.email.getOrElse("")} ${v.toString}")
                     case Left(e) =>
-                      //new RuntimeException(s"Error: $e")
-                      UserAlreadyExists(e.toString)
+                      UserAlreadyExists(s"${inputRequest.email.getOrElse("")} ${e.toString}")
                   }
                 }
             }

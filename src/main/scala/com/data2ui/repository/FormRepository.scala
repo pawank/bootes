@@ -25,6 +25,6 @@ trait FormRepository {
 }
 
 object FormRepository {
-  val layer: URLayer[QDataSource with Has[FormElementsRepository], Has[FormRepository]] = (FormRepositoryLive(_, _)).toLayer
+  val layer: URLayer[QDataSource with Has[FormElementsRepository] with Has[OptionsRepository] with Has[ValidationsRepository], Has[FormRepository]] = (FormRepositoryLive(_, _)).toLayer
 }
 

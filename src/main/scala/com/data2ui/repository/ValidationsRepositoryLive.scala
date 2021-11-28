@@ -88,6 +88,8 @@ object ValidationsQueries {
   def filterByIds(ids: Seq[UUID])               = quote(validsQuery.filter(element => liftQuery(ids).contains(element.id)))
   def byType(value: String)               = quote(validsQuery.filter(_.`type` == lift(value)))
   def filter(values: Seq[FieldValue])               = quote(query[Validations])
+  def filterByElementId(elementId: Option[UUID])               = quote(query[Validations].filter(v => v.elementId == lift(elementId)))
+  def filterByElementIds(ids: Seq[UUID])               = quote(query[Validations].filter(element => liftQuery(ids).contains(element.elementId)))
   def insertValidations(valid: Validations) = quote(validsQuery.insert(lift(valid)))
   def upsertValidations(valid: Validations) = quote(validsQuery.update(lift(valid)))
   def batchUpsert(elements: Seq[Validations]) = quote{

@@ -67,6 +67,24 @@ case class FormElementsRepositoryLive(dataSource: DataSource with Closeable, blo
     } yield xs
   }
 
+  def filterByElementId(elementId: UUID): Task[Option[(Element, Seq[Validations], Seq[Options])]] = {
+    for {
+      results <- run(ElementQueries.byId(elementId)).dependOnDataSource().provide(dataSourceLayer)
+      valids <- run(ValidationsQueries.filterByElementId(results.headOption.map(_.id))).dependOnDataSource().provide(dataSourceLayer)
+      opts <- run(OptionsQueries.filterByElementId(results.headOption.map(_.id))).dependOnDataSource().provide(dataSourceLayer)
+      xs <- ZIO.effect(results.headOption.map(e => (e, valids.toSeq, opts.toSeq))).orElseFail(NotFoundException(s"Could not find elements with input criteria, ${elementId.toString()}", elementId.toString))
+    } yield xs
+  }
+
+  def filterFormId(formId: UUID): Task[(Seq[Element], Seq[Validations], Seq[Options])] = {
+    for {
+      results <- run(ElementQueries.byFormIdWithOrdering(formId)).dependOnDataSource().provide(dataSourceLayer)
+      valids <- run(ValidationsQueries.filterByIds(results.map(_.id))).dependOnDataSource().provide(dataSourceLayer)
+      opts <- run(OptionsQueries.filterByIds(results.map(_.id))).dependOnDataSource().provide(dataSourceLayer)
+      xs <- ZIO.effect((results, valids.toSeq, opts.toSeq)).orElseFail(NotFoundException(s"Could not find elements with input criteria, ${formId.toString()}", formId.toString))
+    } yield xs
+  }
+
   override def update(element: Element): Task[Element] = transaction {
     for {
       _     <- run(ElementQueries.upsertElement(element))
@@ -105,11 +123,17 @@ object ElementQueries {
     liftQuery(elements).foreach(e => query[Element].insert(e).onConflictUpdate(_.id)((t, e) => t.id -> e.id, (t, e) => t.seqNo -> e.seqNo, (t, e) => t.sectionName -> e.sectionName, (t, e) => t.sectionSeqNo -> e.sectionSeqNo , (t, e) => t.name -> e.name, (t, e) => t.`type` -> e.`type`, (t, e) => t.action -> e.action, (t, e) => t.optionsType -> e.optionsType, (t, e) => t.values -> e.values, (t, e) => t.formId -> e.formId, (t, e) => t.required -> e.required, (t, e) => t.errors -> e.errors, (t, e) => t.metadata.map(_.updatedAt) -> e.metadata.map(_.updatedAt), (t, e) => t.metadata.map(_.updatedBy) -> e.metadata.map(_.updatedBy)).returning(_.id))
   }
   def byFormId(formId: UUID)               = quote(elementsQuery.filter(_.formId == lift(Option(formId))))
+  def byFormIdWithOrdering(formId: UUID)               = quote(elementsQuery.sortBy(p => (p.sectionSeqNo, p.seqNo))(Ord(Ord.asc, Ord.asc)).filter(_.formId == lift(Option(formId))))
   def getCreateElementRequestByFormId(formId: UUID)               =   quote {
     for {
       ele <- query[Element].sortBy(p => (p.sectionSeqNo, p.seqNo))(Ord(Ord.asc, Ord.asc)).filter(x => x.formId == Option(lift(formId)))
       valid <- query[Validations].leftJoin(x => x.elementId == Option(ele.id))
+      //valids <- query[Validations].filter(x => x.elementId == Option(ele.id))
       opt <- query[Options].sortBy(p => p.seqNo)(Ord.asc).leftJoin(x => x.elementId == Option(ele.id))
-    } yield (ele, valid, opt)
+      //opts <- query[Options].sortBy(p => p.seqNo)(Ord.asc).filter(x => x.elementId == Option(ele.id))
+    } yield {
+      (ele, valid, opt)
+      //(ele, valids, opts)
+    }
   }
 }

@@ -86,6 +86,8 @@ object OptionsQueries {
   def filterByIds(ids: Seq[UUID])               = quote(optionsQuery.filter(element => liftQuery(ids).contains(element.id)))
   def byName(value: String)               = quote(optionsQuery.filter(_.value == lift(value)))
   def filter(values: Seq[FieldValue])               = quote(query[Options])
+  def filterByElementId(elementId: Option[UUID])               = quote(query[Options].filter(v => v.elementId == lift(elementId)))
+  def filterByElementIds(ids: Seq[Option[UUID]])               = quote(query[Options].filter(element => liftQuery(ids).contains(element.elementId)))
   def insertOptions(option: Options) = quote(optionsQuery.insert(lift(option)))
   def upsertOptions(option: Options) = quote(optionsQuery.update(lift(option)))
   def batchUpsert(elements: Seq[Options]) = quote{

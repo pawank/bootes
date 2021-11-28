@@ -86,6 +86,7 @@ object FormEndpoints extends RequestOps {
               val updatedMetadata = orderedReq.metadata.map(m => m.copy(createdBy = jwtClaim.username.getOrElse(""), updatedBy = jwtClaim.username))
               if (validation) {
                 val validatedForm = CreateFormRequest.validate(orderedReq.copy(metadata = updatedMetadata))
+                //println(s"validatedForm = $validatedForm")
                 if (validatedForm.hasErrors) Task.succeed(validatedForm) else FormService.upsert(validatedForm)(serviceContext.copy(requestId = request.requestId.getOrElse(serviceContext.requestId)))
               } else FormService.upsert(orderedReq.copy(metadata = updatedMetadata))(serviceContext.copy(requestId = request.requestId.getOrElse(serviceContext.requestId)))
             }

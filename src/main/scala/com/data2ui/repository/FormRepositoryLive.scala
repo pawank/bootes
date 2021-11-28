@@ -57,15 +57,49 @@ case class FormRepositoryLive(dataSource: DataSource with Closeable, blocking: B
       f <- formTask
       isVisitorSubmittedForm = f.templateId.isDefined && (stepNo > 0)
       newFormId = if (isRefreshId) Some(UUID.randomUUID()) else None
-      fetchedElements <- {
-        //val id = if (isVisitorSubmittedForm) f.templateId.getOrElse(UUID.randomUUID) else f.id
+      selectedElements <- {
         val id = f.id
-        run(ElementQueries.getCreateElementRequestByFormId(id))
+        run(ElementQueries.byFormIdWithOrdering(id))
       }.dependOnDataSource().provide(dataSourceLayer)
-      templateFormFetchedElements <- {
+      selectedValidations <- {
+        run(ValidationsQueries.filterByElementIds(selectedElements.map(_.id)))
+      }.dependOnDataSource().provide(dataSourceLayer)
+      selectedOptions <- {
+        run(OptionsQueries.filterByElementIds(selectedElements.map(i => Option(i.id))))
+      }.dependOnDataSource().provide(dataSourceLayer)
+      //fetchedElements <- {
+      //  val id = f.id
+      //  run(ElementQueries.getCreateElementRequestByFormId(id))
+      //}.dependOnDataSource().provide(dataSourceLayer)
+      fetchedElements = {
+        selectedElements.toList.map(e => {
+          (e,
+            Some(selectedValidations.toList.filter(v => v.elementId.map(id => id.toString.equals(e.id.toString)).getOrElse(false))),
+            Some(selectedOptions.toList.filter(v => v.elementId.map(id => id.toString.equals(e.id.toString)).getOrElse(false)))
+          )
+        })
+        //Seq((selectedElements.toList, selectedValidations.toList, selectedOptions.toList))
+      }
+      templateFormFetchedElementsIds <- {
         val id = if (isVisitorSubmittedForm) f.templateId.getOrElse(UUID.randomUUID) else UUID.randomUUID
-        run(ElementQueries.getCreateElementRequestByFormId(id))
+        run(ElementQueries.byFormIdWithOrdering(id))
+        //run(ElementQueries.getCreateElementRequestByFormId(id))
       }.dependOnDataSource().provide(dataSourceLayer)
+      selectedValidations2 <- {
+        run(ValidationsQueries.filterByElementIds(templateFormFetchedElementsIds.map(_.id)))
+      }.dependOnDataSource().provide(dataSourceLayer)
+      selectedOptions2 <- {
+        run(OptionsQueries.filterByElementIds(templateFormFetchedElementsIds.map(i => Option(i.id))))
+      }.dependOnDataSource().provide(dataSourceLayer)
+      templateFormFetchedElements = {
+        templateFormFetchedElementsIds.toList.map(e => {
+          (e,
+            Some(selectedValidations2.toList.filter(v => v.elementId.map(id => id.toString.equals(e.id.toString)).getOrElse(false))),
+            Some(selectedOptions2.toList.filter(v => v.elementId.map(id => id.toString.equals(e.id.toString)).getOrElse(false)))
+          )
+        })
+        //Seq((selectedElements.toList, selectedValidations.toList, selectedOptions.toList))
+      }
       fetchedSections <- {
         //println(s"Fetched elements = $fetchedElements")
         val previousStepNo = stepNo - 1
@@ -74,6 +108,7 @@ case class FormRepositoryLive(dataSource: DataSource with Closeable, blocking: B
         val newElements = templateFormFetchedElements.filter(tup => (tup._1.seqNo.getOrElse(-1) == stepNo) && (!oldElements.contains(tup._1.id.toString))).distinctBy(e => e._1.id.toString)
         val newIds = newElements.map(_._1.id.toString)
         val finalElements = oldElements ++ newElements
+        //println(s"finalElements = $finalElements")
         val sectionNoMap = finalElements.map(fe => (fe._1.sectionName.getOrElse(""), fe._1.sectionSeqNo)).toMap
         ZIO.effect({
           val optsValidationsMap: Map[String, (List[Validations], List[Options])] = Map.empty
@@ -87,8 +122,9 @@ case class FormRepositoryLive(dataSource: DataSource with Closeable, blocking: B
             sectionMap.get(key) match {
               case Some(xs) =>
                 val ov = optsValidationsMap.get(optkey).getOrElse((List.empty, List.empty))
-                val valids: List[Validations] = ov._1 ::: x._2.map(List(_)).getOrElse(List.empty)
-                val opts: List[Options] = ov._2 ::: x._3.map(List(_)).getOrElse(List.empty)
+                val valids: List[Validations] = ov._1 ::: x._2.map(List(_).flatten).getOrElse(List.empty)
+                val opts: List[Options] = ov._2 ::: x._3.map(List(_).flatten).getOrElse(List.empty)
+                //println(s"Found: opts = $opts for optkey = $optkey")
                 optsValidationsMap.updated(optkey, (valids, opts))
                 val datas: List[CreateElementRequest] = {
                   val isFound = xs.exists(t => checkId(t.id, x._1.id))
@@ -108,9 +144,11 @@ case class FormRepositoryLive(dataSource: DataSource with Closeable, blocking: B
               case _ =>
                 val valids = x._2.map(List(_)).getOrElse(List.empty)
                 val opts = x._3.map(List(_)).getOrElse(List.empty)
+                //println(s"Options = ${x._3}")
+                //println(s"Not found: opts = $opts for optkey = $optkey")
                 optsValidationsMap.updated(optkey, (valids, opts))
                 val isIdRefreshNeeded = newIds.contains(x._1.id.toString) && (stepNo > 0)
-                val newElement: CreateElementRequest = Element.toCreateElementRequest(x._1, valids, Some(opts))
+                val newElement: CreateElementRequest = Element.toCreateElementRequest(x._1, valids.flatten, Some(opts.flatten))
                 val elt = if (!isIdRefreshNeeded) newElement else applyIdChangesOnElements(newElement)
                 //println(s"NotFound: key = $key, isIdRefreshNeeded = $isIdRefreshNeeded and new elt = $elt for id = ${elt.id}\n")
                 sectionMap = sectionMap + (key -> List(elt))
@@ -176,6 +214,7 @@ case class FormRepositoryLive(dataSource: DataSource with Closeable, blocking: B
           isSubmissionCase = form.status.getOrElse("").equalsIgnoreCase("submitted")
           isSingleElement = requestedElements.size == 1
           tmpElements = if (isSubmissionCase && isSingleElement) {
+            //println(s"isSubmissionCase = $isSubmissionCase and isSingleElement = $isSingleElement")
             val secElementsMap = form.sections.map(s => (s.title, s.seqNo)).toMap
             val inputFormElements = form.sections.map(_.elements).flatten.map(s => (s.id, s)).toMap
             requestedElements.map(CreateElementRequest.toElement(_)).map(e => {

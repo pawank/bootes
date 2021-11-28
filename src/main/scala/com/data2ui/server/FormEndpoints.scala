@@ -35,12 +35,18 @@ object FormEndpoints extends RequestOps {
             case _ =>
               jwtClaim.username
           }
+          val isTemplate = req.url.queryParams.get("template") match {
+            case Some(xs) =>
+              xs.contains("true") || xs.contains("True")
+            case _ =>
+              false
+          }
           for {
             //_ <- ZIO.succeed(scribe.info("Getting list of all forms"))
             _ <- log.locally(CorrelationId(serviceContext.requestId).andThen(DebugJsonLog(serviceContext.toString)))(
               log.debug(s"Calling form service for fetching all forms matching with createdBy or owned by, $createdBy")
             )
-            forms <- FormService.all(createdBy)
+            forms <- FormService.all(createdBy, isTemplate)
           } yield {
             //println(forms)
             Response.jsonString(forms.toJson)

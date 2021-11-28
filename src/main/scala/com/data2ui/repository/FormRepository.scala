@@ -14,7 +14,7 @@ case class FieldValue(field: String, value: String)
 @accessible
 trait FormRepository {
   def upsert(form: CreateFormRequest, sectionName: String, stepNo: Int): Task[CreateFormRequest]
-  def all(owner: Option[String]): Task[Seq[Form]]
+  def all(owner: Option[String], isTemplate: Boolean): Task[Seq[Form]]
   def filter(values: Seq[FieldValue]): Task[Seq[Form]]
   def findById(id: UUID, isRefreshId: Boolean, seqNo: Int): Task[CreateFormRequest]
   def deleteById(id: UUID): Task[Option[String]]

@@ -299,8 +299,8 @@ case class FormRepositoryLive(dataSource: DataSource with Closeable, blocking: B
     for {
       results <- run(ElementQueries.byId(id)).dependOnDataSource().provide(dataSourceLayer)
       r <- {
-        val elt = Element.toCreateElementRequest(results.headOption.get, Seq.empty, None).copy(values = Seq(filename.getOrElse("")))
-        Task.succeed(elt)
+        val elt = Element.toCreateElementRequest(results.headOption.getOrElse(Element(id = UUID.randomUUID, title = "UNKNOWN FILE")), Seq.empty, None).copy(values = Seq(filename.getOrElse("")))
+        Task.effect(elt)
       }
       xs <- ZIO.effect(r).orElseFail(NotFoundException(s"Could not find elements with input criteria", id.toString))
     } yield xs

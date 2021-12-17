@@ -71,11 +71,11 @@ object Models {
 
   case class Element(
                       id: UUID,
-                      seqNo: Option[Int],
+                      seqNo: Option[Int] = None,
                       name: String = "message",
-                      title: String,
-                      description: Option[String],
-                      values: Seq[String],
+                      title: String = "",
+                      description: Option[String] = None,
+                      values: Seq[String] = Seq.empty,
                       `type`: String = "String",
                       required: Option[Boolean] = Option(true),
                       customerError: Option[String] = None,
@@ -83,13 +83,13 @@ object Models {
                       //options: Option[Seq[Options]] = None,
                       optionsType: Option[String] = None,
                       //validations: Seq[Validations],
-                      sectionName: Option[String],
-                      sectionSeqNo: Option[Int],
+                      sectionName: Option[String] = None,
+                      sectionSeqNo: Option[Int] = None,
                       config: Option[Config] = Option(Config(delayInSeconds = 1, showProgressBar = true, progressBarUri = None)),
                       action: Option[Boolean] = Option(false),
                       status: Option[String] = Option("active"),
                       metadata: Option[Metadata] = None,
-                      formId: Option[UUID]
+                      formId: Option[UUID] = None
                     ) extends IElement
   object Element {
     implicit val codec: JsonCodec[Element] = DeriveJsonCodec.gen[Element]

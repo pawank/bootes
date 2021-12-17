@@ -132,7 +132,14 @@ object Validators {
           //val maxOk = (x.toInt <= value.maximum.getOrElse(99999999))
           //println(s"Int: x = $x, minimum = ${value.minimum} and maximum = ${value.maximum}, minOk = $minOk and maxOk = $maxOk")
           //x.toInt.isValidInt && (minOk && maxOk)
-          x.toInt.isValidInt && ((x.toInt >= value.minimum.getOrElse(0)) && (x.toInt <= value.maximum.getOrElse(99999999)))
+          Try (
+            x.toInt.isValidInt && ((x.toInt >= value.minimum.getOrElse(0)) && (x.toInt <= value.maximum.getOrElse(99999999)))
+          ) match {
+            case scala.util.Success(data) => data
+            case scala.util.Failure(ex) =>
+              println(s"Validation has failed with exception, $ex for input, $x in validateInt")
+              false
+          }
         }
         val result = check(values, validateInt)
         if (result._1) Validation.succeed(value) else Validation.fail(s"`type`, number mismatch for the values, ${makeDisplayableValue(result._2)} provided")
@@ -155,16 +162,34 @@ object Validators {
           }
         }
       case "bool" | "boolean" | "Boolean" =>
-        val result = check(values, _.toBoolean)
+        def validateBoolean(x: String): Boolean = {
+          Try(
+            x.toBoolean
+          ) match {
+            case scala.util.Success(data) => data
+            case scala.util.Failure(ex) =>
+              println(s"Validation has failed with exception, $ex for input, $x in validateBoolean")
+              false
+          }
+        }
+        val result = check(values, validateBoolean)
         if (result._1) Validation.succeed(value) else Validation.fail(s"`type`, boolean mismatch for the values, ${makeDisplayableValue(result._2)} provided")
       case "date" | "datetime" | "Date" | "Datetime" =>
         val result = check(values, isValidDate)
         if (result._1) Validation.succeed(value) else Validation.fail(s"`type`, date or datetime mismatch for the values, ${makeDisplayableValue(result._2)} provided")
       case "range" | "Range" =>
         def validateInt(x: String): Boolean = {
-          if ((value.minimum.getOrElse(0) > 0) || (value.maximum.getOrElse(0) > 0)) {
-            (x.toInt >= value.minimum.getOrElse(0)) && (x.toInt <= value.maximum.getOrElse(99999999))
-          } else true
+          Try(
+            if ((value.minimum.getOrElse(0) > 0) || (value.maximum.getOrElse(0) > 0)) {
+              (x.toInt >= value.minimum.getOrElse(0)) && (x.toInt <= value.maximum.getOrElse(99999999))
+            } else true
+          ) match {
+            case scala.util.Success(data) => data
+            case scala.util.Failure(ex) =>
+              println(s"Validation has failed with exception, $ex for input, $x in validateIntRange")
+              false
+          }
+
         }
         def validateRange(x: String): Boolean = {
           value.values.getOrElse(Seq.empty).contains(x)

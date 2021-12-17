@@ -160,7 +160,7 @@ object FormEndpoints extends RequestOps {
                   }
                 case _ =>
                   val uid = UUID.randomUUID()
-                  println(s"Unwanted elenentId = $uid found during upload")
+                  println(s"Unwanted elementId = $uid found during upload")
                   Task.succeed(UploadResponse(id = None, message = "No element identifier provided.", filename = filename, path = None))
               }
             }
@@ -168,7 +168,10 @@ object FormEndpoints extends RequestOps {
             _ <- log.locally(CorrelationId(serviceContext.requestId).andThen(DebugJsonLog(serviceContext.toString)))(
               log.info(s"Uploaded file, ${results.filename} for form, $formId for username, $username")
             )
-          } yield Response.jsonString(results.toJson)
+          } yield {
+            println(s"Element saved $elementMaybe")
+            Response.jsonString(results.toJson)
+          }
 
         case Method.DELETE -> Root / "columba" / "v1" / "forms" / "clearall" / id =>
           for {
@@ -197,6 +200,7 @@ object FormEndpoints extends RequestOps {
       }
       .catchAll {
         case NotFoundException(msg, id) =>
+          println(s"NotFoundException message = $msg for id = $id")
           Http.fail(HttpError.NotFound(Root / "columba" / "v1" / "forms" / id.toString))
         case ex: Throwable =>
           val error = ex.getMessage

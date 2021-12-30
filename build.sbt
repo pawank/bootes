@@ -9,7 +9,7 @@ scalaVersion := "2.13.6"
 
 organization := "bootes"
 
-val zioVersion        = "1.0.12"
+val zioVersion        = "1.0.13"
 val zioPreludeVersion = "1.0.0-RC6"
 val zioLoggingVersion = "0.5.12"
 val zioHttpVersion    = "1.0.0.0-RC17"

@@ -27,8 +27,9 @@ import java.util.UUID
 object FormEndpoints extends RequestOps {
   val responseHeaders = List(Header.contentTypeJson, Header("Access-Control-Allow-Origin", "*"), Header("Access-Control-Allow-Headers", "Origin, Content-Type, Accept, X-Auth-Token"), Header("Access-Control-Allow-Credentials", "true"), Header("Access-Control-Expose-Headers", "Content-Length"), Header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, PATCH, OPTIONS"))
 
-  def generateJsonResponseWithCorsHeaders(data: String) =  {
+  def generateJsonResponseWithCorsHeaders(data: String, status: Option[Status] = None) =  {
             Response.http(
+              status = status.getOrElse(Status.OK),
               content = HttpData.CompleteData(Chunk.fromArray(data.getBytes(HTTP_CHARSET))),
               headers = responseHeaders
             )
@@ -225,6 +226,7 @@ object FormEndpoints extends RequestOps {
         case NotFoundException(msg, id) =>
           println(s"NotFoundException message = $msg for id = $id")
           Http.fail(HttpError.NotFound(Root / "columba" / "v1" / "forms" / id.toString))
+          Http.succeed(generateJsonResponseWithCorsHeaders({Root / "columba" / "v1" / "forms" / id.toString}.toString, status = Some(Status.NOT_FOUND)))
         case ex: Throwable =>
           val error = ex.getMessage
           val finalError = if (error.contains("(missing)")) {
@@ -233,6 +235,7 @@ object FormEndpoints extends RequestOps {
           } else error
           println(s"Forms Exception: $finalError")
           Http.fail(HttpError.InternalServerError(msg = finalError, cause = None))
+          Http.succeed(generateJsonResponseWithCorsHeaders(finalError, status = Some(Status.INTERNAL_SERVER_ERROR)))
         case err =>
           val error = err.toString
           println(s"Forms Uncatched Exception: $error")
@@ -241,8 +244,10 @@ object FormEndpoints extends RequestOps {
             val finalError = s"""${tokens.substring(1)} is missing"""
             println(s"Forms ERROR: $finalError")
             Http.fail(HttpError.BadRequest(msg = finalError))
+            Http.succeed(generateJsonResponseWithCorsHeaders(finalError, status = Some(Status.BAD_REQUEST)))
           } else {
             Http.fail(HttpError.InternalServerError(msg = error))
+            Http.succeed(generateJsonResponseWithCorsHeaders(error, status = Some(Status.INTERNAL_SERVER_ERROR)))
           }
       }
   }

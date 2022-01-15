@@ -225,7 +225,7 @@ object FormEndpoints extends RequestOps {
       .catchAll {
         case NotFoundException(msg, id) =>
           println(s"NotFoundException message = $msg for id = $id")
-          Http.fail(HttpError.NotFound(Root / "columba" / "v1" / "forms" / id.toString))
+          //Http.fail(HttpError.NotFound(Root / "columba" / "v1" / "forms" / id.toString))
           Http.succeed(generateJsonResponseWithCorsHeaders({Root / "columba" / "v1" / "forms" / id.toString}.toString, status = Some(Status.NOT_FOUND)))
         case ex: Throwable =>
           val error = ex.getMessage
@@ -234,7 +234,7 @@ object FormEndpoints extends RequestOps {
             if (tokens.size >= 2) s"""${tokens(1)} is missing""" else tokens(0)
           } else error
           println(s"Forms Exception: $finalError")
-          Http.fail(HttpError.InternalServerError(msg = finalError, cause = None))
+          //Http.fail(HttpError.InternalServerError(msg = finalError, cause = None))
           Http.succeed(generateJsonResponseWithCorsHeaders(finalError, status = Some(Status.INTERNAL_SERVER_ERROR)))
         case err =>
           val error = err.toString
@@ -243,10 +243,10 @@ object FormEndpoints extends RequestOps {
             val tokens = error.replaceAll("""\(missing\)""","")
             val finalError = s"""${tokens.substring(1)} is missing"""
             println(s"Forms ERROR: $finalError")
-            Http.fail(HttpError.BadRequest(msg = finalError))
+            //Http.fail(HttpError.BadRequest(msg = finalError))
             Http.succeed(generateJsonResponseWithCorsHeaders(finalError, status = Some(Status.BAD_REQUEST)))
           } else {
-            Http.fail(HttpError.InternalServerError(msg = error))
+            //Http.fail(HttpError.InternalServerError(msg = error))
             Http.succeed(generateJsonResponseWithCorsHeaders(error, status = Some(Status.INTERNAL_SERVER_ERROR)))
           }
       }

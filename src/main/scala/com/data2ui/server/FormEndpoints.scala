@@ -25,9 +25,19 @@ import java.nio.file.{Files, Paths}
 import java.util.UUID
 
 object FormEndpoints extends RequestOps {
+  val responseHeaders = List(Header.contentTypeJson, Header("Access-Control-Allow-Origin", "*"), Header("Access-Control-Allow-Headers", "Origin, Content-Type, Accept, X-Auth-Token"), Header("Access-Control-Allow-Credentials", "true"), Header("Access-Control-Expose-Headers", "Content-Length"), Header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, PATCH, OPTIONS"))
+
+  def generateJsonResponseWithCorsHeaders(data: String) =  {
+            Response.http(
+              content = HttpData.CompleteData(Chunk.fromArray(data.getBytes(HTTP_CHARSET))),
+              headers = responseHeaders
+            )
+  }
 
   val form: ApiToken => Http[Has[FormService] with Console with Logging, HttpError, Request, UResponse] = jwtClaim => {
     implicit val serviceContext: ServiceContext = getServiceContext(jwtClaim)
+
+
     Http
       .collectM[Request] {
         case req @ Method.GET -> Root / "columba" / "v1" / "forms" / "search" =>
@@ -50,13 +60,7 @@ object FormEndpoints extends RequestOps {
             )
             forms <- FormService.all(createdBy, isTemplate)
           } yield {
-            //println(forms)
-            Response.jsonString(forms.toJson)
-            val data = forms.toJson
-            Response.http(
-              content = HttpData.CompleteData(Chunk.fromArray(data.getBytes(HTTP_CHARSET))),
-              headers = List(Header.contentTypeJson, Header("Access-Control-Allow-Origin", "*"), Header("Access-Control-Allow-Headers", "Origin, Content-Type, Accept, X-Auth-Token"), Header("Access-Control-Allow-Credentials", "true"), Header("Access-Control-Expose-Headers", "Content-Length"), Header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, PATCH, OPTIONS")),
-            )
+            generateJsonResponseWithCorsHeaders(forms.toJson)
           }
         case req @ Method.GET -> Root / "columba" / "v1" / "forms" / id =>
           val sectionSeqNo = (req.url.queryParams.get("seqNo") match {
@@ -73,7 +77,9 @@ object FormEndpoints extends RequestOps {
               //println(s"Form ID = $id with seqNo = $sectionSeqNo")
               FormService.get(UUID.fromString(id), seqNo = sectionSeqNo)
             }
-          } yield Response.jsonString(userForm.toJson)
+          } yield {
+            generateJsonResponseWithCorsHeaders(userForm.toJson)
+          }
         case req @ Method.GET -> Root / "columba" / "v1" / "forms" / "template" / id =>
           for {
             _ <- log.locally(CorrelationId(serviceContext.requestId).andThen(DebugJsonLog(serviceContext.toString)))(
@@ -83,7 +89,9 @@ object FormEndpoints extends RequestOps {
               //println(s"Form ID = $id")
               FormService.getTemplateForm(UUID.fromString(id))
             }
-          } yield Response.jsonString(form.toJson)
+          } yield {
+            generateJsonResponseWithCorsHeaders(form.toJson)
+          }
         case req@Method.POST -> Root / "columba" / "v1" / "forms" =>
           for {
             request <- extractBodyFromJson[CreateFormRequest](req)
@@ -104,8 +112,7 @@ object FormEndpoints extends RequestOps {
               } else FormService.upsert(orderedReq.copy(metadata = updatedMetadata))(serviceContext.copy(requestId = request.requestId.getOrElse(serviceContext.requestId)))
             }
           } yield {
-            //Response.http(content = HttpData.fromStream(ZStream.succeed(results.toJson)))
-            Response.jsonString(results.toJson)
+            generateJsonResponseWithCorsHeaders(results.toJson)
           }
         case req@Method.POST -> Root / "columba" / "v1" / "forms" / sectionName / stepNo =>
           for {
@@ -116,7 +123,9 @@ object FormEndpoints extends RequestOps {
               val validatedForm = CreateFormRequest.validate(orderedReq)
               if (validatedForm.hasErrors) Task.succeed(validatedForm) else FormService.submit(orderedReq, sectionName, stepNo.toInt)(serviceContext.copy(requestId = request.requestId.getOrElse(serviceContext.requestId)))
             }
-          } yield Response.jsonString(results.toJson)
+          } yield {
+            generateJsonResponseWithCorsHeaders(results.toJson)
+          }
         case req@Method.POST -> Root / "columba" / "v1" / "upload" =>
           val elementId = (req.url.queryParams.get("id") match {
             case Some(xs) =>
@@ -180,7 +189,7 @@ object FormEndpoints extends RequestOps {
             )
           } yield {
             println(s"Element saved $elementMaybe")
-            Response.jsonString(results.toJson)
+            generateJsonResponseWithCorsHeaders(results.toJson)
           }
 
         case Method.DELETE -> Root / "columba" / "v1" / "forms" / "clearall" / id =>
@@ -190,7 +199,9 @@ object FormEndpoints extends RequestOps {
               FormService.delete(UUID.fromString(id))
             }
             r <- Task.succeed(UiResponse(requestId = serviceContext.requestId.toString, status = if (maybeError.isDefined) false else true, message = maybeError.getOrElse(""), code = "204", data = List.empty))
-          } yield Response.jsonString(r.toJson)
+          } yield {
+            generateJsonResponseWithCorsHeaders(r.toJson)
+          }
 
         case req @ Method.DELETE -> Root / "columba" / "v1" / "forms" / "template" / id =>
 
@@ -206,7 +217,9 @@ object FormEndpoints extends RequestOps {
               FormService.deleteTemplateForm(UUID.fromString(id), forced)
             }
             r <- Task.succeed(UiResponse(requestId = serviceContext.requestId.toString, status = if (maybeError.isDefined) false else true, message = maybeError.getOrElse(""), code = "204", data = List.empty))
-          } yield Response.jsonString(r.toJson)
+          } yield {
+            generateJsonResponseWithCorsHeaders(r.toJson)
+          }
       }
       .catchAll {
         case NotFoundException(msg, id) =>

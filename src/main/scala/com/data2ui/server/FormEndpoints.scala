@@ -8,6 +8,7 @@ import com.bootes.server.UserServer.{CorrelationId, DebugJsonLog}
 import com.bootes.server.auth.{ApiToken, LogoutRequest, Token}
 import com.data2ui.FormService
 import com.data2ui.models.Models.{CreateFormRequest, UiResponse, UploadResponse}
+import io.netty.handler.codec.smtp.SmtpRequests.data
 import pdi.jwt.JwtClaim
 import scribe.Logger.system
 import zhttp.http._
@@ -24,6 +25,7 @@ import java.nio.file.{Files, Paths}
 import java.util.UUID
 
 object FormEndpoints extends RequestOps {
+
   val form: ApiToken => Http[Has[FormService] with Console with Logging, HttpError, Request, UResponse] = jwtClaim => {
     implicit val serviceContext: ServiceContext = getServiceContext(jwtClaim)
     Http
@@ -50,6 +52,11 @@ object FormEndpoints extends RequestOps {
           } yield {
             //println(forms)
             Response.jsonString(forms.toJson)
+            val data = forms.toJson
+            Response.http(
+              content = HttpData.CompleteData(Chunk.fromArray(data.getBytes(HTTP_CHARSET))),
+              headers = List(Header.contentTypeJson, Header("Access-Control-Allow-Origin", "*"), Header("Access-Control-Allow-Headers", "Origin, Content-Type, Accept, X-Auth-Token"), Header("Access-Control-Allow-Credentials", "true"), Header("Access-Control-Expose-Headers", "Content-Length"), Header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, PATCH, OPTIONS")),
+            )
           }
         case req @ Method.GET -> Root / "columba" / "v1" / "forms" / id =>
           val sectionSeqNo = (req.url.queryParams.get("seqNo") match {
@@ -96,7 +103,10 @@ object FormEndpoints extends RequestOps {
                 if (validatedForm.hasErrors) Task.succeed(validatedForm) else FormService.upsert(validatedForm)(serviceContext.copy(requestId = request.requestId.getOrElse(serviceContext.requestId)))
               } else FormService.upsert(orderedReq.copy(metadata = updatedMetadata))(serviceContext.copy(requestId = request.requestId.getOrElse(serviceContext.requestId)))
             }
-          } yield Response.jsonString(results.toJson)
+          } yield {
+            //Response.http(content = HttpData.fromStream(ZStream.succeed(results.toJson)))
+            Response.jsonString(results.toJson)
+          }
         case req@Method.POST -> Root / "columba" / "v1" / "forms" / sectionName / stepNo =>
           for {
             request <- extractBodyFromJson[CreateFormRequest](req)

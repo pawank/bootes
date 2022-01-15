@@ -90,6 +90,15 @@ object UserServer extends App {
     }
   }
 
+  /*
+  import zhttp.http.middleware.HttpMiddleware.{addHeader, debug, patchM, timeout}
+  import zhttp.http.middleware.{HttpMiddleware, Patch}
+  val serverTime: HttpMiddleware[Clock, Nothing] = patchM((_, _) =>
+    for {
+      currentMilliseconds <- currentTime(TimeUnit.MILLISECONDS)
+      withHeader = Patch.addHeaders(List(Header("X-Time", currentMilliseconds.toString)))
+    } yield withHeader,
+  )*/
 
   val userEndpoints: Http[Has[UserService] with Clock with Console with Logging with system.System with zemail.email.Email, HttpError, Request, Response[Has[UserService]  with Console with Logging with zemail.email.Email, HttpError]] =
     CORS(

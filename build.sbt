@@ -5,7 +5,7 @@ name := "bootes"
 version := "0.1"
 
 //scalaVersion := "3.0.1"
-scalaVersion := "2.13.6"
+scalaVersion := "2.13.8"
 
 organization := "bootes"
 

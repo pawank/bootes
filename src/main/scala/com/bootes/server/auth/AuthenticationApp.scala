@@ -221,23 +221,27 @@ object AuthenticationApp extends RequestOps {
         }
       } yield {
         //println(s"CLAIM: $jwtClaim")
-        Response.jsonString(jwtClaim.toJson)
+        com.data2ui.server.FormEndpoints.generateJsonResponseWithCorsHeaders(jwtClaim.toJson)
+        //Response.jsonString(jwtClaim.toJson)
       }
     }
       .catchAll {
         case FailedLogin(user, message, code) =>
           //Http.fail(HttpError.Unauthorized(s"Failed login for user: $user."))
           val msg = s"Failed login for user: $user."
-          Http.fromEffect(ZIO.succeed(Response.HttpResponse(Status.UNAUTHORIZED, List.empty, HttpData.fromByteBuf(Unpooled.wrappedBuffer(msg.getBytes)))) @@ MetricAspect.count("loginErrorCounter"))
+          //Http.fromEffect(ZIO.succeed(Response.HttpResponse(Status.UNAUTHORIZED, List.empty, HttpData.fromByteBuf(Unpooled.wrappedBuffer(msg.getBytes)))) @@ MetricAspect.count("loginErrorCounter"))
+          Http.succeed(com.data2ui.server.FormEndpoints.generateJsonResponseWithCorsHeaders(msg, status = Some(Status.UNAUTHORIZED)))
         case ex@_ =>
           val error = ex.toString
           if (error.contains("(missing)")) {
             val tokens = error.replaceAll("""\(missing\)""","").split(""" \.""")
             val finalError = if (tokens.size >= 2) tokens(1) else tokens(0)
-            Http.fail(HttpError.Unauthorized(s"Login Failed with error: ${finalError} missing."))
+            //Http.fail(HttpError.Unauthorized(s"Login Failed with error: ${finalError} missing."))
+            Http.succeed(com.data2ui.server.FormEndpoints.generateJsonResponseWithCorsHeaders(s"Login Failed with error: ${finalError} missing.", status = Some(Status.UNAUTHORIZED)))
           }
           else {
-            Http.fail(HttpError.Unauthorized(s"Login Failed with error: ${error}"))
+            //Http.fail(HttpError.Unauthorized(s"Login Failed with error: ${error}"))
+            Http.succeed(com.data2ui.server.FormEndpoints.generateJsonResponseWithCorsHeaders(s"Login Failed with error: ${error}", status = Some(Status.UNAUTHORIZED)))
           }
       }
   }

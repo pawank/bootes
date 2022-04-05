@@ -41,6 +41,22 @@ object FormEndpoints extends RequestOps {
 
     Http
       .collectM[Request] {
+        case req @ Method.GET -> Root / "columba" / "v1" / "forms" / "submissions" =>
+          val formId: Option[String] = (req.url.queryParams.get("formId") match {
+            case Some(value) => value.headOption
+            case _ => None
+          })
+          for {
+            //_ <- ZIO.succeed(scribe.info("Getting list of all forms"))
+            _ <- log.locally(CorrelationId(serviceContext.requestId).andThen(DebugJsonLog(serviceContext.toString)))(
+              log.debug(s"Calling form service for fetching all submitted forms matching with id, $formId")
+            )
+            allForms <- FormService.getAll(if (formId.isDefined && !formId.get.isEmpty()) Seq(formId.map(UUID.fromString(_)).getOrElse(UUID.randomUUID())) else Seq.empty)
+            _ <- log.debug(s"Showing all submissions for formId = $formId")
+            //forms <- FormService.submissions(formId.map(UUID.fromString(_)))
+          } yield {
+            generateJsonResponseWithCorsHeaders(allForms.toJson)
+          }
         case req @ Method.GET -> Root / "columba" / "v1" / "forms" / "search" =>
           val createdBy = req.url.queryParams.get("createdBy") match {
             case Some(xs) =>
@@ -120,7 +136,7 @@ object FormEndpoints extends RequestOps {
             request <- extractBodyFromJson[CreateFormRequest](req)
             results <- {
               val orderedReq = request.copy(sections = request.sections.map(s => s.copy(elements = s.makeElementsOrdered())))
-              //println(s"Route sectionName = $sectionName")
+              //println(s"Route sectionName = $orderedReq")
               val validatedForm = CreateFormRequest.validate(orderedReq)
               if (validatedForm.hasErrors) Task.succeed(validatedForm) else FormService.submit(orderedReq, sectionName, stepNo.toInt)(serviceContext.copy(requestId = request.requestId.getOrElse(serviceContext.requestId)))
             }

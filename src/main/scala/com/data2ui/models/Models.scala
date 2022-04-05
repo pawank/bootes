@@ -13,6 +13,7 @@ import zio.test.Assertion._
 import java.util.UUID
 import java.util.concurrent.TimeUnit
 import scala.concurrent.duration.{DurationInt, FiniteDuration}
+import java.time.ZonedDateTime
 
 object Models {
 
@@ -47,6 +48,12 @@ object Models {
                      )
   object Options {
     implicit val codec: JsonCodec[Options] = DeriveJsonCodec.gen[Options]
+  }
+
+  case class Submission(id: UUID, template_id: Option[UUID], title: String, sub_title: String, status: String, form_created_on: ZonedDateTime, created_by: Option[String],element_id: Option[UUID], seq_no: Int, element_name: String, element_title: String, 
+    values: Seq[String], value: Option[String],  field_type: String, section_name: Option[String],section_seq_no: Int, submitted_by: Option[String], submitted_on: Option[ZonedDateTime])
+  object Submission {
+    implicit val codecSubmission: JsonCodec[Submission] = DeriveJsonCodec.gen[Submission]
   }
 
   sealed trait IElement extends Embedded {
@@ -130,7 +137,7 @@ object Models {
   }
   object CreateElementRequest{
     implicit val codec: JsonCodec[CreateElementRequest] = DeriveJsonCodec.gen[CreateElementRequest]
-    def toElement(element: CreateElementRequest) = element.into[Element].transform.copy(id = element.id, seqNo = element.seqNo)
+    def toElement(element: CreateElementRequest) = element.into[Element].transform.copy(id = element.id, seqNo = element.seqNo, metadata = element.metadata)
     def makeFileElement(id: UUID, formId: UUID) = CreateElementRequest(id = id, seqNo = None, name = "file", title = "", description = None,
       values = Seq.empty, `type` = "String", formId = Some(formId), validations = Seq.empty, sectionName = None, sectionSeqNo = None)
   }

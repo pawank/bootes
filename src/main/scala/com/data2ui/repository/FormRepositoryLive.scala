@@ -18,6 +18,7 @@ import java.util.UUID
 import javax.sql.DataSource
 import scala.::
 import scala.collection.immutable.SortedMap
+import java.time.ZonedDateTime
 
 case class FormRepositoryLive(dataSource: DataSource with Closeable, blocking: Blocking.Service) extends FormRepository {
   val dataSourceLayer: Has[DataSource with Closeable] with Has[Blocking.Service] = Has.allOf[DataSource with Closeable, Blocking.Service](dataSource, blocking)
@@ -250,6 +251,13 @@ case class FormRepositoryLive(dataSource: DataSource with Closeable, blocking: B
     }
     getCreateFormRequest(formTask, isRefreshId = false, sectionName, stepNo + 1)
   }
+  
+  override def submissions(formId: Option[UUID]): Task[Seq[Form]] = formId match {
+    case Some(id) =>
+        run(FormQueries.byTemplateIdAndStatus(id)).dependOnDataSource().provide(dataSourceLayer)
+    case _ =>
+      run(FormQueries.byTemplateIdAndStatus(UUID.randomUUID())).dependOnDataSource().provide(dataSourceLayer)
+  }
 
   override def all(owner: Option[String], isTemplate: Boolean): Task[Seq[Form]] = owner match {
     case Some(username) =>
@@ -383,6 +391,8 @@ object FormQueries {
   val elementsQuery                   = quote(query[Form])
   def byId(id: UUID)               = quote(elementsQuery.filter(_.id == lift(id)))
   def byTemplateId(id: UUID)       = quote(elementsQuery.filter(_.templateId == lift(Some(id): Option[UUID])))
+  def byTemplateIdAndStatus(id: UUID)       = quote(elementsQuery.filter(e => e.templateId == lift(Some(id): Option[UUID]) && e.status == lift(Some("submitted"): Option[String])))
+  def byIds(ids: Seq[UUID])               = quote(elementsQuery.filter(element => liftQuery(ids.map(id => Option(id))).contains(element.templateId)))
   def delete(id: UUID)               = {
     quote(elementsQuery.filter(_.id == lift(id)).delete)
   }

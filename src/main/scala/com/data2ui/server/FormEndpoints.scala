@@ -112,24 +112,32 @@ object FormEndpoints extends RequestOps {
         case req@Method.POST -> Root / "columba" / "v1" / "forms" =>
           for {
             request <- extractBodyFromJson[CreateFormRequest](req)
+            allFormSubmissions <- {
+              val formId = request.templateId.getOrElse(request.id)
+              FormService.getAll(Seq(formId))
+            }
             results <- {
-              val validation = req.url.queryParams.get("validation") match {
-                case Some(xs) =>
-                  xs.contains("true") || xs.contains("True")
-                case _ =>
-                  false
-              }
-              val orderedReq = request.copy(sections = request.sections.map(s => s.copy(elements = s.makeElementsOrdered())))
-              //println(s"Ordered req = $orderedReq\n\n")
-              val updatedMetadata = orderedReq.metadata.map(m => m.copy(createdBy = jwtClaim.username.getOrElse(""), updatedBy = jwtClaim.username))
-              if (validation) {
-                val validatedForm = CreateFormRequest.validate(orderedReq.copy(metadata = updatedMetadata))
-                //println(s"validatedForm = $validatedForm")
-                if (validatedForm.hasErrors) Task.succeed(validatedForm) else FormService.upsert(validatedForm)(serviceContext.copy(requestId = request.requestId.getOrElse(serviceContext.requestId)))
-              } else FormService.upsert(orderedReq.copy(metadata = updatedMetadata))(serviceContext.copy(requestId = request.requestId.getOrElse(serviceContext.requestId)))
+              if (allFormSubmissions.isEmpty) {
+                val validation = req.url.queryParams.get("validation") match {
+                  case Some(xs) =>
+                    xs.contains("true") || xs.contains("True")
+                  case _ =>
+                    false
+                }
+                val orderedReq = request.copy(sections = request.sections.map(s => s.copy(elements = s.makeElementsOrdered())))
+                //println(s"Ordered req = $orderedReq\n\n")
+                val updatedMetadata = orderedReq.metadata.map(m => m.copy(createdBy = jwtClaim.username.getOrElse(""), updatedBy = jwtClaim.username))
+                if (validation) {
+                  val validatedForm = CreateFormRequest.validate(orderedReq.copy(metadata = updatedMetadata))
+                  //println(s"validatedForm = $validatedForm")
+                  if (validatedForm.hasErrors) Task.succeed(validatedForm) else FormService.upsert(validatedForm)(serviceContext.copy(requestId = request.requestId.getOrElse(serviceContext.requestId)))
+                } else FormService.upsert(orderedReq.copy(metadata = updatedMetadata))(serviceContext.copy(requestId = request.requestId.getOrElse(serviceContext.requestId)))
+              } else Task.succeed(request)
             }
           } yield {
-            generateJsonResponseWithCorsHeaders(results.toJson)
+              if (allFormSubmissions.isEmpty) {
+               generateJsonResponseWithCorsHeaders(UiResponse(requestId = serviceContext.requestId.toString, status = true, message = s"Sorry, Form has submissions. You cannot edit the form anymore.", code = "405", data = List.empty).toJson)
+              } else generateJsonResponseWithCorsHeaders(results.toJson)
           }
         case req@Method.POST -> Root / "columba" / "v1" / "forms" / sectionName / stepNo =>
           for {

@@ -115,6 +115,8 @@ libraryDependencies ++= Seq(
   "dev.doamaral"                  %% "zemail"                   % "0.1.0",
   "io.getquill" %% "quill-orientdb" % quillVersion,
   "org.scalikejdbc" %% "scalikejdbc"       % "3.5.0",
+  //"com.github.eikek" %% "emil-common" % "0.12.0",
+  "dev.zio"                       %% "zio-process" % "0.6.1",
   "dev.zio"                       %% "zio-test"                 % zioVersion % Test,
   "dev.zio"                       %% "zio-test-sbt"             % zioVersion % Test,
   "dev.zio"                       %% "zio-test-magnolia"        % zioVersion % Test

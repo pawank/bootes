@@ -4,7 +4,7 @@ import com.bootes.dao.{Metadata, ResponseMessage}
 import com.bootes.dao.keycloak.Models.{ApiResponseError, ApiResponseSuccess, Attributes, Email, KeycloakUser, Phone, ServiceContext}
 import com.bootes.dao.repository.{JSONB, UserRepository}
 import com.bootes.server.auth.{ApiToken, LogoutRequest}
-import com.data2ui.models.Models.{CreateElementRequest, CreateFormRequest, Form}
+import com.data2ui.models.Models.{CreateElementRequest, CreateFormRequest, Form, Submission}
 import com.data2ui.repository.FormRepository
 import io.getquill.Embedded
 import io.scalaland.chimney.dsl.TransformerOps
@@ -32,7 +32,9 @@ trait FormService {
   def upsert(request: CreateFormRequest)(implicit ctx: ServiceContext): Task[CreateFormRequest]
   def submit(request: CreateFormRequest, sectionName: String, stepNo: Int)(implicit ctx: ServiceContext): Task[CreateFormRequest]
   def all(owner: Option[String], isTemplate: Boolean)(implicit ctx: ServiceContext): Task[Seq[Form]]
+  def submissions(formId: Option[UUID])(implicit ctx: ServiceContext): Task[Seq[Form]]
   def get(id: UUID, seqNo: Int)(implicit ctx: ServiceContext): Task[CreateFormRequest]
+  def getAll(ids: Seq[UUID])(implicit ctx: ServiceContext): Task[Seq[Submission]]
   def delete(id: UUID)(implicit ctx: ServiceContext): Task[Option[String]]
   def deleteTemplateForm(id: UUID, forced: Option[Boolean])(implicit ctx: ServiceContext): Task[Option[String]]
   def getTemplateForm(id: UUID)(implicit ctx: ServiceContext): Task[CreateFormRequest]
@@ -61,12 +63,18 @@ case class FormServiceLive(repository: FormRepository, console: Console.Service)
     repository.upsert(request, sectionName, stepNo)
   }
 
+  override def submissions(formId: Option[UUID])(implicit ctx: ServiceContext): Task[Seq[Form]] = for {
+    elements <- repository.submissions(formId)
+    _     <- console.putStrLn(s"Forms: ${elements.map(_.title).mkString(",")}")
+  } yield elements.sortBy(_.id)
+
   override def all(owner: Option[String], isTemplate:Boolean)(implicit ctx: ServiceContext): Task[Seq[Form]] = for {
     elements <- repository.all(owner, isTemplate)
     _     <- console.putStrLn(s"Forms: ${elements.map(_.title).mkString(",")}")
   } yield elements.sortBy(_.id)
 
   override def get(id: UUID, seqNo: Int)(implicit ctx: ServiceContext): Task[CreateFormRequest] = repository.findById(id, isRefreshId = true, seqNo)
+  override def getAll(ids: Seq[UUID])(implicit ctx: ServiceContext): Task[Seq[Submission]] = ZIO.effect(com.data2ui.repository.Queries.getSubmissions(com.data2ui.repository.Queries.RAPIDOR_MASTER_DB, ids.headOption, "submitted").toSeq)
   override def delete(id: UUID)(implicit ctx: ServiceContext): Task[Option[String]] = repository.deleteById(id)
   override def deleteTemplateForm(id: UUID, forced: Option[Boolean])(implicit ctx: ServiceContext): Task[Option[String]] = repository.deleteTemplateForm(id, forced)
   override def getTemplateForm(id: UUID)(implicit ctx: ServiceContext): Task[CreateFormRequest] = repository.findById(id, isRefreshId = false, seqNo = 0)

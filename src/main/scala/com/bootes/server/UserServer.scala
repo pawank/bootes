@@ -45,6 +45,7 @@ import zio.telemetry.opentracing._
 import java.io.IOException
 import java.lang
 import scala.jdk.CollectionConverters._
+import shapeless.ops.fin
 
 final case class Status(name: String, status: String)
 
@@ -175,11 +176,20 @@ object UserServer extends App {
 
     for {
       conf <- getConfig[AppConfig]
-      backendPort = conf.backend.host.port.getOrElse(8000)
-      service = makeService(conf.zipkinTracer.host, "bootes")
+      port = sys.env.get("APPLICATION_SERVER_PORT")
+      backendPort = {
+        val finalPort = if (port.isDefined && !port.get.isEmpty()) port.get.toInt else conf.backend.host.port.getOrElse(8000)
+        println(s"Application starting on port: $finalPort")
+        finalPort
+      }
+      zipkinHost = { 
+        val host = sys.env.get("ZIPKIN_TRACER_HOST")
+        if (host.isDefined && !host.get.isEmpty()) host.get else conf.zipkinTracer.host
+      }
+      //service = makeService(zipkinHost, "bootes")
       _ <- putStrLn(s"Starting the server at port, $backendPort")
-      server = Server.port(backendPort) ++ Server.app(status(service) +++ getVersion(rootPath) +++ app) ++ Server.maxRequestSize(4194304)
-      s <- server.start.inject(ServerChannelFactory.auto, EventLoopGroup.auto(0), Clock.live, PrometheusClient.live, Console.live, ZioQuillContext.dataSourceLayer, OptionsRepository.layer, ValidationsRepository.layer, FormElementsRepository.layer, logLayer, AsyncHttpClientZioBackend.layer(), UserService.layerKeycloakService, FormRepository.layer, FormService.layer, system.System.live, com.bootes.utils.EmailUtils.builder.buildLayer) @@ aspServerStartCountAll
+      server = Server.port(backendPort) ++ Server.app(getVersion(rootPath) +++ app) ++ Server.maxRequestSize(4194304)
+      s <- server.start.inject(ServerChannelFactory.auto, EventLoopGroup.auto(0), Clock.live, PrometheusClient.live, Console.live, ZioQuillContext.dataSourceLayer, OptionsRepository.layer, ValidationsRepository.layer, FormElementsRepository.layer, logLayer, AsyncHttpClientZioBackend.layer(), UserService.layerKeycloakService, FormRepository.layer, FormService.layer, system.System.live, com.bootes.utils.EmailUtils.builder.buildLayer) 
       //s <- server.start.inject(ServerChannelFactory.auto, EventLoopGroup.auto(0), Clock.live, configLayer, JaegerTracer.live, Tracing.live, PrometheusClient.live, Console.live, ZioQuillContext.dataSourceLayer, OptionsRepository.layer, ValidationsRepository.layer, FormElementsRepository.layer, logLayer, AsyncHttpClientZioBackend.layer(), UserService.layerKeycloakService, FormRepository.layer, FormService.layer, system.System.live) @@ aspServerStartCountAll
       _ <- putStrLn(s"Shutting down the server at port, $backendPort")
     } yield s
@@ -192,7 +202,7 @@ object UserServer extends App {
     Runtime.default.mapPlatform(_.withSupervisor(ZMXSupervisor))
 
   override def run(args: List[String]): URIO[zio.ZEnv, ExitCode] = {
-    runtime.unsafeRun(program.provideCustomLayer(diagnosticsLayer ++ configLayer))
+    runtime.unsafeRun(program.provideCustomLayer(configLayer))
     //program.exitCode
   }
 }

@@ -7,6 +7,7 @@ import zio._
 import zio.macros.accessible
 
 import java.util.UUID
+import java.time.ZonedDateTime
 
 
 case class FieldValue(field: String, value: String)
@@ -15,6 +16,7 @@ case class FieldValue(field: String, value: String)
 trait FormRepository {
   def upsert(form: CreateFormRequest, sectionName: String, stepNo: Int): Task[CreateFormRequest]
   def all(owner: Option[String], isTemplate: Boolean): Task[Seq[Form]]
+  def submissions(formId: Option[UUID]): Task[Seq[Form]]
   def filter(values: Seq[FieldValue]): Task[Seq[Form]]
   def findById(id: UUID, isRefreshId: Boolean, seqNo: Int): Task[CreateFormRequest]
   def deleteById(id: UUID): Task[Option[String]]

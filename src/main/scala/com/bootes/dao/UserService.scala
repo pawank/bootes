@@ -160,6 +160,7 @@ object User {
   implicit val codec: JsonCodec[User]                                 = DeriveJsonCodec.gen[User]
 
   val sample = User(id = None, `type` = "real", code = "1", name = Name(firstName = "Pawan", lastName = "Kumar"), status = "active", metadata = Some(Metadata.default))
+  val sampleEmailTest = User(id = None, `type` = "real", code = "1", name = Name(firstName = "Pawan", lastName = "Kumar"), status = "active", contactMethod = Some(ContactMethod(email1 = Some("pawan.kumar@gmail.com"))), metadata = Some(Metadata.default))
 
   implicit def fromKeycloakUser(keycloakUser: KeycloakUser): User = {
     val phone1xs: Seq[String] = keycloakUser.attributes.map(_.phone.getOrElse(Seq.empty)).getOrElse(Seq.empty)

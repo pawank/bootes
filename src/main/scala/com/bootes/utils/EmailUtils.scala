@@ -14,6 +14,8 @@ import courier.{Mailer, _}
 
 object EmailUtils {
   val welcomeTemplate: String = Source.fromFile("src/main/resources/welcome_email.html").mkString
+  val formSubmissionTemplate: String = Source.fromFile("src/main/resources/form_submission.html").mkString
+  val formElementTemplate: String = Source.fromFile("src/main/resources/form_section.html").mkString
   
   val builder = 
     Mailer(System.getenv("EMAIL_SERVER_HOSTNAME"), System.getenv("EMAIL_SERVER_PORT").toInt)

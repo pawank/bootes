@@ -107,7 +107,7 @@ object UserServer extends App {
       config = getCorsConfig()
     )
 
-  val formEndpoints: Http[Has[FormService] with Clock with Console with Logging with system.System, HttpError, Request, Response[Has[FormService] with Console with Logging, HttpError]] =
+  val formEndpoints: Http[Has[FormService] with Has[UserService] with Clock with Console with Logging with system.System with zemail.email.Email, HttpError, Request, Response[Has[FormService] with Has[UserService] with Console with Logging with zemail.email.Email, HttpError]] =
     CORS(
         AuthenticationApp.authenticate(HttpApp.forbidden("Oops! You are not authorised to access the requested feature. Please check your credentials."), FormEndpoints.form),
       config = getCorsConfig()

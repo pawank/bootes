@@ -59,18 +59,18 @@ case class FormServiceLive(repository: FormRepository, console: Console.Service)
   }
 
   override def submit(request: CreateFormRequest, sectionName: String, stepNo: Int)(implicit ctx: ServiceContext): Task[CreateFormRequest] = {
-    println(s"submit: request = $request, sectionName = $sectionName and stepNo = $stepNo")
+    //println(s"submit: request = $request, sectionName = $sectionName and stepNo = $stepNo")
     repository.upsert(request, sectionName, stepNo)
   }
 
   override def submissions(formId: Option[UUID])(implicit ctx: ServiceContext): Task[Seq[Form]] = for {
     elements <- repository.submissions(formId)
-    _     <- console.putStrLn(s"Forms: ${elements.map(_.title).mkString(",")}")
+    //_     <- console.putStrLn(s"Forms: ${elements.map(_.title).mkString(",")}")
   } yield elements.sortBy(_.id)
 
   override def all(owner: Option[String], isTemplate:Boolean)(implicit ctx: ServiceContext): Task[Seq[Form]] = for {
     elements <- repository.all(owner, isTemplate)
-    _     <- console.putStrLn(s"Forms: ${elements.map(_.title).mkString(",")}")
+    //_     <- console.putStrLn(s"Forms: ${elements.map(_.title).mkString(",")}")
   } yield elements.sortBy(_.id)
 
   override def get(id: UUID, seqNo: Int)(implicit ctx: ServiceContext): Task[CreateFormRequest] = repository.findById(id, isRefreshId = true, seqNo)

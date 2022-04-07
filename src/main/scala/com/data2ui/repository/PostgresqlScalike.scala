@@ -168,7 +168,8 @@ object Queries {
 
   def getQueryData(id: Option[UUID], status: String) = id match {
 	  case Some(formid) =>
-	  sql"""select a.id,a.template_id,a.title,a.sub_title,a.status,a.created_at as form_created_on,a.created_by,b.id as submission_id,b.seq_no,b.name as element_name,b.title as element_title,b.values,b.type,b.section_name,b.section_seq_no,b.created_at as submitted_on from form as a left join form_element as b on a.id=b.form_id where a.template_id=$formid and b.id is not null and a.status=$status order by b.section_seq_no,b.seq_no"""
+	  sql"""select a.id,a.template_id,a.title,a.sub_title,a.status,a.created_at as form_created_on,a.created_by,b.id as submission_id,b.seq_no,b.name as element_name,b.title as element_title,b.values,b.type,b.section_name,b.section_seq_no,b.created_at as submitted_on from form as a left join form_element as b on a.id=b.form_id where (a.id=$formid OR a.template_id=$formid) and b.id is not null and a.status=$status order by b.section_seq_no,b.seq_no"""
+	  //sql"""select a.id,a.template_id,a.title,a.sub_title,a.status,a.created_at as form_created_on,a.created_by,b.id as submission_id,b.seq_no,b.name as element_name,b.title as element_title,b.values,b.type,b.section_name,b.section_seq_no,b.created_at as submitted_on from form as a left join form_element as b on a.id=b.form_id where a.template_id=$formid and b.id is not null and a.status=$status order by b.section_seq_no,b.seq_no"""
 		case _ =>
 	  sql"""select a.id,a.template_id,a.title,a.sub_title,a.status,a.created_at as form_created_on,a.created_by,b.id as submission_id,b.seq_no,b.name as element_name,b.title as element_title,b.values,b.type,b.section_name,b.section_seq_no,b.created_at as submitted_on from form as a left join form_element as b on a.id=b.form_id where a.template_id is not null and b.id is not null and a.status=$status order by b.section_seq_no,b.seq_no"""
   }

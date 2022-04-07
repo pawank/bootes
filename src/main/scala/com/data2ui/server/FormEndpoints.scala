@@ -23,6 +23,11 @@ import zio.stream.ZStream
 import java.io.{FileInputStream, IOException}
 import java.nio.file.{Files, Paths}
 import java.util.UUID
+import com.data2ui.models.Models
+import com.bootes.dao.User
+import java.time.ZonedDateTime
+import scala.util.matching.Regex
+import com.bootes.dao.UserService
 
 object FormEndpoints extends RequestOps {
   val responseHeaders = List(Header.contentTypeJson, Header("Access-Control-Allow-Origin", "*"), Header("Access-Control-Allow-Headers", "Origin, Content-Type, Accept, X-Auth-Token"), Header("Access-Control-Allow-Credentials", "true"), Header("Access-Control-Expose-Headers", "Content-Length"), Header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, PATCH, OPTIONS"))
@@ -35,7 +40,7 @@ object FormEndpoints extends RequestOps {
             )
   }
 
-  val form: ApiToken => Http[Has[FormService] with Console with Logging, HttpError, Request, UResponse] = jwtClaim => {
+  val form: ApiToken => Http[Has[FormService] with Has[UserService] with Console with Logging with zemail.email.Email, HttpError, Request, UResponse] = jwtClaim => {
     implicit val serviceContext: ServiceContext = getServiceContext(jwtClaim)
 
 
@@ -147,6 +152,48 @@ object FormEndpoints extends RequestOps {
               //println(s"Route sectionName = $orderedReq")
               val validatedForm = CreateFormRequest.validate(orderedReq)
               if (validatedForm.hasErrors) Task.succeed(validatedForm) else FormService.submit(orderedReq, sectionName, stepNo.toInt)(serviceContext.copy(requestId = request.requestId.getOrElse(serviceContext.requestId)))
+            }
+            userAndSubmissions <- {
+              if (results.sections.isEmpty) {
+                val tmplId = request.templateId.getOrElse(request.id)
+                for {
+                    tmplForm <- FormService.getTemplateForm(tmplId)
+                    allFormSubmissions <- {
+                      val formId = tmplForm.id
+                      println(s"tmplId = $tmplId and formId = $formId")
+                      FormService.getAll(Seq(formId))
+                    }
+                    user <- UserService.get(tmplForm.metadata.map(_.createdBy).getOrElse(""))
+                } yield (Some(user), allFormSubmissions)
+
+              } else {
+                  ZIO.succeed((None, Seq.empty))
+              }
+            }
+            notify <- {
+              val url = "https://forms.rapidor.co"
+              val submissions: Seq[Models.Submission] = userAndSubmissions._2
+              if (submissions.isEmpty) {
+                  ZIO.succeed(s"No submissions found for the form template, ${request.templateId.getOrElse(request.id)}")
+              } else {
+                val formHead = submissions.headOption
+                val sections = submissions.map(f => { 
+                    com.bootes.utils.EmailUtils.formElementTemplate.replaceAll("""___SECTIONNAME___""", Regex.quoteReplacement(s"""${f.section_name.getOrElse("")}""")).replaceAll("___ELEMENTTITLE___", Regex.quoteReplacement(s"""${f.element_title}""")).replaceAll("___ELEMENTVALUE___", Regex.quoteReplacement(s"""${f.values.mkString(",")}""")).replaceAll("___ELEMENTSUBMITTEDON___", Regex.quoteReplacement(s"""${f.submitted_on.getOrElse(ZonedDateTime.now()).toLocalDateTime().toString()}"""))
+                  }).mkString("""<br/>""")
+                val body: String = formHead.map(f => {
+                  val body1 = com.bootes.utils.EmailUtils.formSubmissionTemplate.replaceAll("""___FORMTITLE___""", Regex.quoteReplacement(s"""${f.title}""")).replaceAll("___FORMSUBTITLE___", Regex.quoteReplacement(s"""${f.sub_title}""")).replaceAll("___FORMSUBMITTEDON___", Regex.quoteReplacement(s"""${f.submitted_on.getOrElse(ZonedDateTime.now()).toLocalDateTime().toString()}"""))
+                  body1.replaceAll("___SECTIONS___", Regex.quoteReplacement(sections))
+                }).getOrElse("")
+                //println(s"final email body = $body")
+                //val user: Option[User] =  userAndSubmissions._1 
+                val user = Some(User.sampleEmailTest)
+                println(s"User found: $user with submissions count = ${userAndSubmissions._2.size}")
+                val email = user.map(u => u.contactMethod.map(_.email1.getOrElse("")).getOrElse("")).getOrElse("")
+                if (email.trim().isEmpty())
+                  ZIO.succeed(s"No email for submissions to be sent because email found is empty for user, $user")
+                else
+                  com.bootes.utils.EmailUtils.send("Customer Care <admin@rapidor.co>", email, "New Form Submission", body).fork
+                }
             }
           } yield {
             generateJsonResponseWithCorsHeaders(results.toJson)

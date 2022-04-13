@@ -140,7 +140,7 @@ object FormEndpoints extends RequestOps {
               } else Task.succeed(request)
             }
           } yield {
-              if (allFormSubmissions.isEmpty) {
+              if (!allFormSubmissions.isEmpty) {
                generateJsonResponseWithCorsHeaders(UiResponse(requestId = serviceContext.requestId.toString, status = true, message = s"Sorry, Form has submissions. You cannot edit the form anymore.", code = "405", data = List.empty).toJson)
               } else generateJsonResponseWithCorsHeaders(results.toJson)
           }
@@ -192,7 +192,7 @@ object FormEndpoints extends RequestOps {
                 if (email.trim().isEmpty())
                   ZIO.succeed(s"No email for submissions to be sent because email found is empty for user, $user")
                 else
-                  com.bootes.utils.EmailUtils.send("Customer Care <admin@rapidor.co>", email, "New Form Submission", body).fork
+                  com.bootes.utils.EmailUtils.send("Customer Care <admin@rapidor.co>", email, "New Form Submission", body)
                 }
             }
           } yield {
@@ -264,11 +264,47 @@ object FormEndpoints extends RequestOps {
             generateJsonResponseWithCorsHeaders(results.toJson)
           }
 
-        case Method.DELETE -> Root / "columba" / "v1" / "forms" / "clearall" / id =>
+        case req @ Method.DELETE -> Root / "columba" / "v1" / "forms" / "clearall" / id =>
+          val forced: Boolean = (req.url.queryParams.get("forced") match {
+            case Some(xs) =>
+              xs.headOption.map(_.toBoolean)
+            case _ =>
+              None
+          }).getOrElse(false)
           for {
+            templateForm <- FormService.getTemplateForm(UUID.fromString(id))
+            userAndSubmissions <- {
+              if (!templateForm.templateId.isDefined) {
+                val tmplId = templateForm.id
+                //val tmplId = templateForm.templateId.getOrElse(templateForm.id)
+                for {
+                    tmplForm <- FormService.getTemplateForm(tmplId)
+                    allFormSubmissions <- {
+                      val formId = tmplForm.id
+                      //println(s"tmplId = $tmplId and formId = $formId")
+                      FormService.getAll(Seq(formId))
+                    }
+                    user <- UserService.get(tmplForm.metadata.map(_.createdBy).getOrElse(""))
+                } yield (Some(user), allFormSubmissions)
+
+              } else {
+                  ZIO.succeed((None, Seq.empty))
+              }
+            }
             maybeError <- {
-              //println(s"Form ID = $id")
-              FormService.delete(UUID.fromString(id))
+               if (forced) {
+                  if (templateForm.templateId.isDefined) {
+                    FormService.deleteTemplateForm(UUID.fromString(id), Some(forced))
+                  } else FormService.delete(UUID.fromString(id))
+                } else {
+                  val submissions: Seq[Models.Submission] = userAndSubmissions._2
+                  if (!submissions.isEmpty) {
+                      ZIO.succeed(Option(s"There are submissions found for the form template, ${templateForm.templateId.getOrElse(templateForm.id)}. Therefore, deletion is not allowed."))
+                  } else {
+                    //println(s"Form ID = $id")
+                    FormService.delete(UUID.fromString(id))
+                  }
+                }
             }
             r <- Task.succeed(UiResponse(requestId = serviceContext.requestId.toString, status = if (maybeError.isDefined) false else true, message = maybeError.getOrElse(""), code = "204", data = List.empty))
           } yield {
@@ -299,14 +335,20 @@ object FormEndpoints extends RequestOps {
           //Http.fail(HttpError.NotFound(Root / "columba" / "v1" / "forms" / id.toString))
           Http.succeed(generateJsonResponseWithCorsHeaders({Root / "columba" / "v1" / "forms" / id.toString}.toString, status = Some(Status.NOT_FOUND)))
         case ex: Throwable =>
-          val error = ex.getMessage
-          val finalError = if (error.contains("(missing)")) {
-            val tokens = error.replaceAll("""\(missing\)""","").split("""\.""")
-            if (tokens.size >= 2) s"""${tokens(1)} is missing""" else tokens(0)
-          } else error
-          println(s"Forms Exception: $finalError")
-          //Http.fail(HttpError.InternalServerError(msg = finalError, cause = None))
-          Http.succeed(generateJsonResponseWithCorsHeaders(finalError, status = Some(Status.INTERNAL_SERVER_ERROR)))
+          if ((ex == null) || (ex.getMessage == null)){
+            println(s"Forms Exception: No error found but seems like the object is not found")
+            //Http.fail(HttpError.InternalServerError(msg = finalError, cause = None))
+            Http.succeed(generateJsonResponseWithCorsHeaders("No record found", status = Some(Status.NOT_FOUND)))
+          } else {
+            val error = ex.getMessage
+            val finalError = if (error.contains("(missing)")) {
+              val tokens = error.replaceAll("""\(missing\)""","").split("""\.""")
+              if (tokens.size >= 2) s"""${tokens(1)} is missing""" else tokens(0)
+            } else error
+            println(s"Forms Exception: $finalError")
+            //Http.fail(HttpError.InternalServerError(msg = finalError, cause = None))
+            Http.succeed(generateJsonResponseWithCorsHeaders(finalError, status = Some(Status.INTERNAL_SERVER_ERROR)))
+          }
         case err =>
           val error = err.toString
           println(s"Forms Uncatched Exception: $error")

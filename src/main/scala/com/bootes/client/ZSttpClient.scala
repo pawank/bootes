@@ -210,12 +210,12 @@ trait HttpClient {
               val statusCode = r.code.code >= 200 && r.code.code < 300
               r.body match {
                 case Right(data) =>
-                  //println(s"data = $data")
+                  println(s"postOrPut: data = $data and code = ${r.code}")
                   val xs = r.code.code match {
                     case 201 =>
                       """{"message":"Created"}""".fromJson[U]
                     case 204 =>
-                      """{"message":"No Content"}""".fromJson[U]
+                      """{"value":"No Content"}""".fromJson[U]
                     case _ =>
                       data.fromJson[U]
                   }
